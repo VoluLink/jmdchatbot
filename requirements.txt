@@ -8,3 +8,12 @@ pydantic
 pydantic-settings
 python-dotenv
 httpx
+gradio
+
+# Advanced document parsing
+llama-index-readers-file
+pypdf
+python-docx
+python-pptx
+beautifulsoup4
+lxml

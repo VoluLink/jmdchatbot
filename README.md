@@ -118,25 +118,61 @@ Der Update-Job:
 
 ### Einmaligen Update-Lauf ausführen
 
+**Option 1: Advanced Parsing (Empfohlen)** 🚀
+
+```bash
+python -m src.updater.advanced_jobs
+```
+
+Unterstützt: PDF, DOCX, PPTX, HTML, TXT, MD und mehr!
+
+**Option 2: Basic Parsing**
+
 ```bash
 python -m src.updater.jobs
 ```
+
+Nur für `.txt` und `.md` Dateien.
+
+📖 **Details**: Siehe [ADVANCED_PARSING.md](ADVANCED_PARSING.md)
 
 Dies kann auch über einen Scheduler (z. B. `cron`, Windows Task Scheduler, Airflow) periodisch gestartet werden.
 
 ---
 
-## FastAPI-Query-Service starten
+## Web Interface starten
 
 Stelle sicher, dass mindestens ein Update-Lauf stattgefunden hat (oder initial Daten indexiert wurden).
+
+### Option 1: Mit Gradio Web UI (Empfohlen) 🎨
+
+```bash
+python run_web_interface.py
+```
+
+Oder direkt:
 
 ```bash
 uvicorn src.app.main:app --reload
 ```
 
-Standardmäßig läuft die API unter `http://127.0.0.1:8000`.
+Das System startet mit:
+- **🎨 Gradio Chat Interface**: `http://127.0.0.1:8000` (Hauptseite)
+- **📚 API Dokumentation**: `http://127.0.0.1:8000/docs` (Swagger UI)
+- **💚 Health Check**: `http://127.0.0.1:8000/health`
 
-### Wichtige Endpoints
+### Gradio Features
+
+- **Conversational Chat Interface** – Fragen in natürlicher Sprache stellen
+- **Source Citations** – Automatische Anzeige der verwendeten Quellen mit Relevanz-Scores
+- **Adjustable Retrieval** – top_k Slider zur Steuerung der Anzahl abgerufener Dokumente
+- **Example Questions** – Vorgefertigte Beispielfragen zum schnellen Start
+
+📖 **Detaillierte Anleitung**: Siehe [GRADIO_SETUP.md](GRADIO_SETUP.md)
+
+### Option 2: REST API Endpoints
+
+Die FastAPI-Endpoints sind weiterhin verfügbar:
 
 - `GET /health` – einfacher Healthcheck
 - `POST /query` – Frage an den RAG-Index stellen

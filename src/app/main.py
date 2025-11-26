@@ -5,9 +5,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+import gradio as gr
 
 from src.config.settings import get_settings
 from src.indexing import get_index_manager
+from src.app.gradio_interface import gradio_app
 
 
 class QueryRequest(BaseModel):
@@ -28,6 +30,9 @@ app = FastAPI(
     description="Einfacher Query-Service für eine modulare RAG-Pipeline.",
     version="0.1.0",
 )
+
+# Mount Gradio interface at root
+app = gr.mount_gradio_app(app, gradio_app, path="/")
 
 
 @app.get("/health")
