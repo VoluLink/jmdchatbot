@@ -9,6 +9,7 @@ import chromadb
 from llama_index.core import Document, VectorStoreIndex
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import BaseNode
+from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
@@ -34,10 +35,14 @@ class IndexManager:
         # LLM für LlamaIndex
         self._llm = OpenAI(api_key=settings.openai_api_key, model=settings.openai_model)
 
+        # Embedding-Modell für LlamaIndex
+        self._embed_model = OpenAIEmbedding(api_key=settings.openai_api_key)
+
         # Index aus bestehendem VectorStore aufbauen (wenn leer, wird er automatisch gefüllt)
         self._index = VectorStoreIndex.from_vector_store(
             self._vector_store,
             llm=self._llm,
+            embed_model=self._embed_model,
         )
 
         # Chunking

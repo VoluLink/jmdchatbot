@@ -1,15 +1,45 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import gradio as gr
+from llama_index.core.query_engine import CitationQueryEngine
+from llama_index.core.prompts import PromptTemplate
 
 from src.config.settings import get_settings
 from src.indexing import get_index_manager
-from src.app.gradio_interface import gradio_app
+
+
+# System prompt for concise, well-structured responses
+SYSTEM_PROMPT = """Du bist ein hilfreicher Assistent für deutsches Aufenthalts- und Asylrecht.
+
+Regeln für deine Antworten:
+- Antworte präzise und kompakt (max. 3-4 kurze Absätze)
+- Strukturiere mit Aufzählungen wenn sinnvoll
+- Verwende Inline-Zitate [1], [2] etc. direkt nach relevanten Aussagen
+- Schreibe auf Deutsch
+- KEINE Quellenangaben am Ende auflisten (diese werden automatisch angezeigt)
+- Keine Überschriften wie "Antwort:" oder "Zusammenfassung:"
+"""
+
+CITATION_QA_TEMPLATE = PromptTemplate(
+    SYSTEM_PROMPT + """
+
+Kontext-Informationen aus den Dokumenten:
+---------------------
+{context_str}
+---------------------
+
+Beantworte die folgende Frage basierend auf dem Kontext. Verwende Inline-Zitate [1], [2] etc.
+
+Frage: {query_str}
+
+Antwort: """
+)
 
 
 class QueryRequest(BaseModel):
@@ -31,8 +61,28 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Mount Gradio interface at root
-app = gr.mount_gradio_app(app, gradio_app, path="/")
+# Add CORS Middleware to allow requests from the frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+def clean_response(text: str) -> str:
+    """Remove trailing source sections from LLM response."""
+    # Remove common patterns like "Quellen:", "Sources:", "Referenzen:" at the end
+    patterns = [
+        r'\n\s*Quellen:.*$',
+        r'\n\s*Sources:.*$',
+        r'\n\s*Referenzen:.*$',
+        r'\n\s*Quellenangaben:.*$',
+    ]
+    for pattern in patterns:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
+    return text.strip()
 
 
 @app.get("/health")
@@ -49,11 +99,19 @@ async def query(req: QueryRequest) -> QueryResponse:
     """
     Stelle eine Frage an den RAG-Index.
 
-    Antwortet mit generiertem Text und den wichtigsten Quellen.
+    Antwortet mit generiertem Text und Inline-Zitaten.
     """
 
     index = index_manager.index
-    query_engine = index.as_query_engine(similarity_top_k=req.top_k)
+    
+    # Use CitationQueryEngine for inline citations [1], [2], etc.
+    query_engine = CitationQueryEngine.from_args(
+        index,
+        similarity_top_k=req.top_k,
+        llm=index_manager._llm,
+        citation_chunk_size=512,
+        citation_qa_template=CITATION_QA_TEMPLATE,
+    )
 
     try:
         # LlamaIndex ist synchron, daher in Thread ausführen.
@@ -63,15 +121,21 @@ async def query(req: QueryRequest) -> QueryResponse:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     # Antwort und Quellen extrahieren.
-    answer_text = str(response)
+    answer_text = clean_response(str(response))
     sources: List[Dict[str, Any]] = []
-    for node in getattr(response, "source_nodes", []) or []:
+    for idx, node in enumerate(getattr(response, "source_nodes", []) or []):
         metadata = node.metadata or {}
+        # Get filename from path
+        path = metadata.get("path") or metadata.get("file_path") or ""
+        filename = path.split("\\")[-1].split("/")[-1] if path else f"Quelle {idx + 1}"
+        
         sources.append(
             {
+                "id": idx + 1,  # Citation number [1], [2], etc.
                 "score": getattr(node, "score", None),
                 "source": metadata.get("source"),
-                "path": metadata.get("path"),
+                "path": path,
+                "filename": filename,
                 "url": metadata.get("url"),
             }
         )

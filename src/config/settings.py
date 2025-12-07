@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     # OpenAI / LLM
     openai_api_key: str
-    openai_model: str = "gpt-4o-mini"
+    openai_model: str = "gpt-5-mini"
 
     # Pfade
     base_dir: Path = Path(__file__).resolve().parents[2]
