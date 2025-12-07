@@ -138,17 +138,21 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="h-full bg-[#212121] text-slate-100 overflow-auto">
-      <div className="max-w-5xl mx-auto p-8">
+    <div className="h-full w-full overflow-y-auto bg-[#212121] text-slate-100 grey-scrollbar">
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-semibold text-white flex items-center gap-3">
-              <Users className="h-7 w-7" />
-              Benutzerverwaltung
-            </h1>
-            <p className="text-slate-400 mt-1">
-              Verwalten Sie Benutzerkonten und Berechtigungen
+        <div className="flex items-start justify-between gap-6">
+          <div className="space-y-2">
+            <p className="text-base font-semibold uppercase tracking-[0.3em] text-slate-400">
+              Benutzer
+            </p>
+            <div className="flex items-center gap-3">
+              <h1 className="text-4xl font-semibold text-white leading-tight">
+                Benutzerverwaltung
+              </h1>
+            </div>
+            <p className="text-sm text-slate-300">
+              Verwalte Benutzerkonten und Berechtigungen
             </p>
           </div>
           <button
@@ -161,7 +165,7 @@ export default function UsersPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-3 gap-4">
           <div className="bg-white/5 border border-white/10 rounded-xl p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-indigo-500/20 rounded-lg">
@@ -198,7 +202,7 @@ export default function UsersPage() {
         </div>
 
         {/* Search */}
-        <div className="relative mb-6">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"

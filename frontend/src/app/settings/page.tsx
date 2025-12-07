@@ -58,7 +58,7 @@ export default function SettingsPage() {
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
         <div className="flex items-start justify-between gap-6">
           <div className="space-y-2">
-            <p className="text-base font-semibold uppercase tracking-[0.3em] text-slate-200">
+            <p className="text-base font-semibold uppercase tracking-[0.3em] text-slate-400">
               Systemsteuerung
             </p>
             <div className="flex items-center gap-3">

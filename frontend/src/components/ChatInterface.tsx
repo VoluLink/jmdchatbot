@@ -169,7 +169,7 @@ export function ChatInterface() {
             </div>
             <div className="space-y-2 max-w-md">
               <h2 className="text-2xl font-semibold text-gray-200 tracking-tight">Wie kann ich dir helfen?</h2>
-              <p className="text-gray-400">Stellen Sie Fragen zu Ihren Dokumenten und ich finde die Antworten für Sie.</p>
+              <p className="text-gray-400">Stell mir Fragen zu deinen Dokumenten und ich finde die Antworten für dich.</p>
             </div>
             
             <div className="grid grid-cols-2 gap-3 max-w-lg w-full mt-8">
