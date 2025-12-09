@@ -191,21 +191,7 @@ npm run dev
 - **📚 API Dokumentation**: `http://localhost:8000/docs` (Swagger UI)
 - **💚 Health Check**: `http://localhost:8000/health`
 
-### Option 2: Gradio Web UI
-
-Alternativ kann das integrierte Gradio-Interface verwendet werden:
-
-```bash
-python run_web_interface.py
-```
-
-Das System startet mit:
-- **🎨 Gradio Chat Interface**: `http://127.0.0.1:8000` (Hauptseite)
-- **📚 API Dokumentation**: `http://127.0.0.1:8000/docs` (Swagger UI)
-
-📖 **Detaillierte Anleitung**: Siehe [GRADIO_SETUP.md](GRADIO_SETUP.md)
-
-### Option 3: REST API Endpoints
+### Option 2: REST API Endpoints
 
 Die FastAPI-Endpoints sind direkt nutzbar:
 
@@ -236,12 +222,6 @@ Die FastAPI-Endpoints sind direkt nutzbar:
   ]
 }
 ```
-
----
-
-## Schnellstart
-
-Für einen schnellen Start siehe auch [QUICK_START.md](QUICK_START.md).
 
 ---
 
