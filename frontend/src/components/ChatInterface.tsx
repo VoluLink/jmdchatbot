@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Bot, Loader2, Paperclip, Mic, MessageSquare, Trash2, User, ExternalLink } from "lucide-react";
+import { Send, Bot, Paperclip, Mic, MessageSquare, Trash2, User, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChatHistoryContext } from "./ClientLayout";
 import Link from "next/link";

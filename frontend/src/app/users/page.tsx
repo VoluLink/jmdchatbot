@@ -4,15 +4,12 @@ import { useState, useEffect } from "react";
 import { 
   UserPlus, 
   Trash2, 
-  Shield, 
   User as UserIcon, 
   Mail, 
   Crown,
   Users,
   Search,
-  MoreVertical,
-  Check,
-  X
+  Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +39,6 @@ export default function UsersPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [newUser, setNewUser] = useState({ name: "", email: "", role: "user" as "admin" | "user" });
-  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Load users from localStorage
   useEffect(() => {
