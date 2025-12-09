@@ -1,14 +1,14 @@
 ## RAG Seminararbeit – Modulare LlamaIndex-Pipeline
 
-Dieses Projekt demonstriert eine modulare Retrieval-Augmented-Generation (RAG) Pipeline mit **LlamaIndex**, **Chroma** als lokalem VectorStore und einem **FastAPI**-Query-Service.
+Dieses Projekt demonstriert eine modulare Retrieval-Augmented-Generation (RAG) Pipeline mit **LlamaIndex**, **Chroma** als lokalem VectorStore, einem **FastAPI**-Query-Service und einem modernen **Next.js**-Frontend.
 
 Ziele:
 
 - **ca. 30 MB Textdaten** verarbeiten (lokale Dateien + Web-Quellen)
 - **neuen Content per Upload** (Dateien einfach ins Datenverzeichnis legen)
-- **automatische Updates** über einen Update-Job (z. B. Gesetzestexte per URL)
+- **automatische Updates** über einen Update-Job (z. B. Gesetzestexte per URL)
 - **inkrementelles Indexing** mit persistentem Chroma-Storage
-- später **als API/Service** nutzbar
+- **modernes Web-Interface** mit Chat, Dokumentenverwaltung und Benutzereinstellungen
 
 ---
 
@@ -22,6 +22,10 @@ Ziele:
 │  ├─ updater          # Update-Job (scheduled/cron-fähig)
 │  ├─ app              # FastAPI-App (Query-Service)
 │  └─ config           # Settings, .env-Handling
+├─ frontend            # Next.js Web-Interface
+│  ├─ src/app          # App Router Pages
+│  ├─ src/components   # React-Komponenten
+│  └─ src/lib          # Utilities & Hooks
 ├─ tests               # Platz für Tests
 ├─ requirements.txt    # Python-Abhängigkeiten
 └─ README.md
@@ -32,6 +36,7 @@ Ziele:
 ## Voraussetzungen
 
 - **Python 3.11**
+- **Node.js 18+** (für das Frontend)
 - Internetzugang (für Modell-API und optionale Web-Quellen)
 
 Empfohlen: Nutzung in einem **virtuellen Environment**.
@@ -42,7 +47,7 @@ Empfohlen: Nutzung in einem **virtuellen Environment**.
 
 ### 1. Repository vorbereiten
 
-Im Projektroot (z. B. `C:\Users\User\Desktop\rag-seminararbeit`):
+Im Projektroot (z. B. `C:\Users\User\Desktop\rag-seminararbeit`):
 
 ```bash
 cd rag-seminararbeit
@@ -71,11 +76,19 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+### 4. Frontend installieren
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
 ---
 
 ## Konfiguration (.env)
 
-Im Projektroot eine Datei `.env` anlegen, z. B.:
+Im Projektroot eine Datei `.env` anlegen, z. B.:
 
 ```bash
 OPENAI_API_KEY=dein_openai_api_key
@@ -136,7 +149,7 @@ Nur für `.txt` und `.md` Dateien.
 
 📖 **Details**: Siehe [ADVANCED_PARSING.md](ADVANCED_PARSING.md)
 
-Dies kann auch über einen Scheduler (z. B. `cron`, Windows Task Scheduler, Airflow) periodisch gestartet werden.
+Dies kann auch über einen Scheduler (z. B. `cron`, Windows Task Scheduler, Airflow) periodisch gestartet werden.
 
 ---
 
@@ -144,35 +157,57 @@ Dies kann auch über einen Scheduler (z. B. `cron`, Windows Task Scheduler, Ai
 
 Stelle sicher, dass mindestens ein Update-Lauf stattgefunden hat (oder initial Daten indexiert wurden).
 
-### Option 1: Mit Gradio Web UI (Empfohlen) 🎨
+### Option 1: Next.js Frontend (Empfohlen) 🎨
 
-```bash
-python run_web_interface.py
-```
+Das moderne Web-Interface bietet eine vollständige Benutzeroberfläche:
 
-Oder direkt:
+**Terminal 1 – Backend starten:**
 
 ```bash
 uvicorn src.app.main:app --reload
 ```
 
+**Terminal 2 – Frontend starten:**
+
+```bash
+cd frontend
+npm run dev
+```
+
+Öffne dann [http://localhost:3000](http://localhost:3000) im Browser.
+
+#### Frontend Features
+
+| Seite | Beschreibung |
+|-------|--------------|
+| **💬 Chat** | Konversationelles RAG-Interface mit Chatverlauf |
+| **📄 Dokumente** | Übersicht aller indexierten Dokumente, Upload-Funktion |
+| **👥 Benutzer** | Benutzerverwaltung mit Rollen (Admin/User) |
+| **⚙️ Einstellungen** | Retrieval-Parameter (top_k), Anzeigeoptionen, Sprache |
+
+#### Endpoints
+
+- **🎨 Frontend**: `http://localhost:3000`
+- **📚 API Dokumentation**: `http://localhost:8000/docs` (Swagger UI)
+- **💚 Health Check**: `http://localhost:8000/health`
+
+### Option 2: Gradio Web UI
+
+Alternativ kann das integrierte Gradio-Interface verwendet werden:
+
+```bash
+python run_web_interface.py
+```
+
 Das System startet mit:
 - **🎨 Gradio Chat Interface**: `http://127.0.0.1:8000` (Hauptseite)
 - **📚 API Dokumentation**: `http://127.0.0.1:8000/docs` (Swagger UI)
-- **💚 Health Check**: `http://127.0.0.1:8000/health`
-
-### Gradio Features
-
-- **Conversational Chat Interface** – Fragen in natürlicher Sprache stellen
-- **Source Citations** – Automatische Anzeige der verwendeten Quellen mit Relevanz-Scores
-- **Adjustable Retrieval** – top_k Slider zur Steuerung der Anzahl abgerufener Dokumente
-- **Example Questions** – Vorgefertigte Beispielfragen zum schnellen Start
 
 📖 **Detaillierte Anleitung**: Siehe [GRADIO_SETUP.md](GRADIO_SETUP.md)
 
-### Option 2: REST API Endpoints
+### Option 3: REST API Endpoints
 
-Die FastAPI-Endpoints sind weiterhin verfügbar:
+Die FastAPI-Endpoints sind direkt nutzbar:
 
 - `GET /health` – einfacher Healthcheck
 - `POST /query` – Frage an den RAG-Index stellen
@@ -204,16 +239,24 @@ Die FastAPI-Endpoints sind weiterhin verfügbar:
 
 ---
 
+## Schnellstart
+
+Für einen schnellen Start siehe auch [QUICK_START.md](QUICK_START.md).
+
+---
+
 ## Erweiterbarkeit
 
 - **Neue Datenquellen**:
-  - Weitere Loader-Funktionen in `src/ingestion` hinzufügen (z. B. Datenbanken, APIs)
+  - Weitere Loader-Funktionen in `src/ingestion` hinzufügen (z. B. Datenbanken, APIs)
 - **Andere VectorStores**:
   - Anderen `VectorStore` in `src/indexing/index_manager.py` verwenden
 - **Alternative LLMs**:
-  - In `IndexManager` das LLM wechseln (z. B. lokale Modelle über `llama-index-llms-...`)
+  - In `IndexManager` das LLM wechseln (z. B. lokale Modelle über `llama-index-llms-...`)
 - **API-Erweiterung**:
-  - Weitere Endpoints in `src/app/main.py` hinzufügen (z. B. Admin-Routen, Debug-Infos)
+  - Weitere Endpoints in `src/app/main.py` hinzufügen (z. B. Admin-Routen, Debug-Infos)
+- **Frontend anpassen**:
+  - Komponenten in `frontend/src/components` erweitern
+  - Neue Seiten in `frontend/src/app` hinzufügen
 
 Die Struktur ist bewusst modular gehalten, damit Komponenten unabhängig erweitert oder ersetzt werden können.
-
