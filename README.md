@@ -26,7 +26,6 @@ Ziele:
 │  ├─ src/app          # App Router Pages
 │  ├─ src/components   # React-Komponenten
 │  └─ src/lib          # Utilities & Hooks
-├─ tests               # Platz für Tests
 ├─ requirements.txt    # Python-Abhängigkeiten
 └─ README.md
 ```
@@ -146,8 +145,6 @@ python -m src.updater.jobs
 ```
 
 Nur für `.txt` und `.md` Dateien.
-
-📖 **Details**: Siehe [ADVANCED_PARSING.md](ADVANCED_PARSING.md)
 
 Dies kann auch über einen Scheduler (z. B. `cron`, Windows Task Scheduler, Airflow) periodisch gestartet werden.
 
