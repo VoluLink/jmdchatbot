@@ -2,6 +2,8 @@
 
 import { Sidebar } from "@/components/Sidebar";
 import { useChatHistory, ChatMessage } from "@/lib/useChatHistory";
+import { useAuth } from "@/contexts/AuthContext";
+import { usePathname } from "next/navigation";
 import { createContext, useContext } from "react";
 
 interface ChatHistoryContextType {
@@ -27,7 +29,35 @@ export function useChatHistoryContext() {
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const chatHistory = useChatHistory();
+  const { user, loading } = useAuth();
+  const pathname = usePathname();
 
+  const isPublicPath = pathname === "/login" || pathname === "/register";
+
+  // Show loading spinner while checking auth
+  if (loading && !isPublicPath) {
+    return (
+      <div className="h-screen w-screen bg-[#212121] flex items-center justify-center">
+        <div className="w-12 h-12 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Redirect to login if not authenticated
+  if (!user && !isPublicPath && !loading) {
+    return (
+      <div className="h-screen w-screen bg-[#212121] flex items-center justify-center">
+        <div className="w-12 h-12 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Public routes (login/register) - no sidebar
+  if (isPublicPath) {
+    return <>{children}</>;
+  }
+
+  // Authenticated routes - with sidebar
   return (
     <ChatHistoryContext.Provider value={chatHistory}>
       <Sidebar

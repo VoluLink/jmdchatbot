@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Send, Bot, Paperclip, Mic, MessageSquare, Trash2, User, ExternalLink } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, encodePathSegments } from "@/lib/utils";
 import { useChatHistoryContext } from "./ClientLayout";
 import Link from "next/link";
 
@@ -34,8 +34,32 @@ export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [settings, setSettings] = useState({ topK: 5, showSources: true, temperature: 0.7, chunkSize: 512 });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Load settings from localStorage and listen for changes
+  useEffect(() => {
+    const loadSettings = () => {
+      const stored = localStorage.getItem("rag-assistant-settings");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          setSettings(parsed);
+        } catch {}
+      }
+    };
+
+    loadSettings();
+
+    // Listen for settings changes
+    const handleSettingsChange = (e: CustomEvent) => {
+      setSettings(e.detail);
+    };
+
+    window.addEventListener("rag-settings-changed" as any, handleSettingsChange);
+    return () => window.removeEventListener("rag-settings-changed" as any, handleSettingsChange);
+  }, []);
 
   // Load messages from current session
   useEffect(() => {
@@ -91,7 +115,9 @@ export function ChatInterface() {
         },
         body: JSON.stringify({
           question: userMessage,
-          top_k: 5,
+          top_k: settings.topK,
+          temperature: settings.temperature,
+          chunk_size: settings.chunkSize,
         }),
       });
 
@@ -233,7 +259,7 @@ export function ChatInterface() {
                 )}
               </div>
               
-              {message.sources && message.sources.length > 0 && (() => {
+              {settings.showSources && message.sources && message.sources.length > 0 && (() => {
                 // Deduplicate sources by filename, keeping highest score and collecting all citation IDs
                 const uniqueSources = message.sources.reduce((acc: Map<string, {source: Source, ids: number[]}>, source: Source, idx: number) => {
                   const filename = source.filename || source.path?.split(/[\\/]/).pop() || `Quelle ${idx + 1}`;
@@ -256,7 +282,7 @@ export function ChatInterface() {
                     {Array.from(uniqueSources.entries()).map(([filename, { source, ids }]) => (
                       <Link
                         key={filename}
-                        href={`/documents/${encodeURIComponent(filename)}`}
+                        href={`/documents/${encodePathSegments(filename)}`}
                         className="inline-flex items-center gap-1.5 px-2 py-1 bg-white/40 border border-white/20 rounded-full shadow-sm text-[11px] text-gray-600 hover:bg-indigo-100 hover:border-indigo-300 hover:text-indigo-700 transition-colors cursor-pointer backdrop-blur-sm group"
                         title={`${filename} - Klicken zum Öffnen`}
                       >

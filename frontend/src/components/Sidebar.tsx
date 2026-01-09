@@ -12,10 +12,12 @@ import {
   Trash2,
   History,
   MessageCircle,
-  Users
+  Users,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChatSession } from "@/lib/useChatHistory";
+import { useAuth } from "@/contexts/AuthContext";
 import { useState } from "react";
 
 const navigation = [
@@ -41,6 +43,7 @@ export function Sidebar({
   onDeleteSession 
 }: SidebarProps) {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(true);
 
   const formatDate = (timestamp: number) => {
@@ -178,16 +181,28 @@ export function Sidebar({
         </div>
       </div>
       
-      {/* User Profile - Technical Card */}
+      {/* User Profile */}
       <div className="p-4 border-t border-white/10">
-        <div className="flex items-center gap-3 px-3 py-3 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 transition-colors cursor-pointer shadow-sm">
-          <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center border border-white/20 text-slate-100 font-mono text-xs">
-            NU
+        <div className="flex items-center gap-3 px-3 py-3 rounded-md border border-white/10 bg-white/5">
+          <div className={cn(
+            "h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold",
+            user?.role === "admin"
+              ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+              : "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
+          )}>
+            {user?.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?"}
           </div>
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-slate-100 uppercase tracking-wide">Nutzer</span>
-            <span className="text-[10px] text-slate-400 font-mono">PRO.V1</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-slate-100 truncate">{user?.name || "User"}</p>
+            <p className="text-[10px] text-slate-400 truncate">{user?.email}</p>
           </div>
+          <button
+            onClick={logout}
+            className="p-1.5 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-300 transition-colors"
+            title="Abmelden"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>

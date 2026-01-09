@@ -94,9 +94,32 @@ class IndexManager:
             all_nodes.extend(nodes)
         return all_nodes
 
+    def delete_document(self, doc_id: str) -> bool:
+        """
+        Lösche alle Nodes eines Dokuments aus dem Index.
+        
+        Returns True wenn erfolgreich gelöscht, False wenn Dokument nicht existiert.
+        """
+        try:
+            # Delete all nodes/chunks associated with this document ID
+            self._index.delete_ref_doc(doc_id, delete_from_docstore=True)
+            
+            # Remove from metadata
+            if doc_id in self._metadata:
+                del self._metadata[doc_id]
+                self._save_metadata()
+            
+            return True
+        except Exception as e:
+            # Document might not exist in index yet (first time indexing)
+            return False
+
     def upsert_documents(self, documents: Sequence[Document]) -> int:
         """
         Füge neue/geänderte Dokumente in den Index ein.
+        
+        WICHTIG: Löscht alte Versionen eines Dokuments, bevor neue Chunks eingefügt werden.
+        Dies verhindert doppelte/veraltete Daten im Index.
 
         Die Funktion erwartet, dass die übergebenen Dokumente bereits
         als "neu oder geändert" erkannt wurden (z. B. über content_hash).
@@ -105,18 +128,29 @@ class IndexManager:
         if not documents:
             return 0
 
-        # Indexiere Nodes inkrementell.
-        nodes = self._build_nodes(documents)
-        self._index.insert_nodes(nodes)
-
-        # Metadaten aktualisieren.
+        # Für jedes Dokument: Alte Nodes löschen, dann neue einfügen
         for doc in documents:
             doc_id = doc.doc_id
+            
+            # Lösche alte Version des Dokuments (falls vorhanden)
+            if doc_id in self._metadata:
+                print(f"  🗑️  Removing old version of: {doc.metadata.get('name', doc_id)}")
+                self.delete_document(doc_id)
+            
+            # Erstelle neue Chunks/Nodes
+            nodes = self._build_nodes([doc])
+            
+            # Füge neue Nodes ein
+            self._index.insert_nodes(nodes)
+            print(f"  ✅ Indexed {len(nodes)} chunk(s) for: {doc.metadata.get('name', doc_id)}")
+            
+            # Metadaten aktualisieren
             content_hash = doc.metadata.get("content_hash")
             self._metadata[doc_id] = {
                 "source": doc.metadata.get("source"),
                 "path": doc.metadata.get("path"),
                 "url": doc.metadata.get("url"),
+                "name": doc.metadata.get("name"),
                 "content_hash": content_hash,
             }
 
@@ -141,6 +175,18 @@ class IndexManager:
                 changed.append(doc)
 
         return changed
+
+    def get_all_document_ids(self) -> List[str]:
+        """
+        Gibt alle doc_ids zurück, die aktuell im Index sind.
+        """
+        return list(self._metadata.keys())
+
+    def get_document_metadata(self, doc_id: str) -> Dict | None:
+        """
+        Gibt Metadaten für ein bestimmtes Dokument zurück.
+        """
+        return self._metadata.get(doc_id)
 
 
 @lru_cache(maxsize=1)
