@@ -37,6 +37,8 @@ httpx>=0.25.0
 
 # Authentication & Security
 bcrypt>=4.1.0
+twilio>=8.10.0
+phonenumbers>=8.13.0
 
 # ============================================================================
 # Optional: Uncomment if needed

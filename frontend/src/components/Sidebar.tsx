@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { 
-  MessageSquare, 
-  FileText, 
-  Settings, 
-  ChevronRight, 
+import { usePathname, useRouter } from "next/navigation";
+import {
+  MessageSquare,
+  FileText,
+  Settings,
+  ChevronRight,
   ChevronDown,
   Plus,
   Trash2,
@@ -35,14 +35,15 @@ interface SidebarProps {
   onDeleteSession?: (id: string) => void;
 }
 
-export function Sidebar({ 
-  sessions = [], 
+export function Sidebar({
+  sessions = [],
   currentSessionId,
   onSelectSession,
   onNewSession,
-  onDeleteSession 
+  onDeleteSession
 }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(true);
 
@@ -50,11 +51,29 @@ export function Sidebar({
     const date = new Date(timestamp);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) return "Heute";
     if (diffDays === 1) return "Gestern";
     if (diffDays < 7) return `Vor ${diffDays} Tagen`;
     return date.toLocaleDateString("de-DE", { day: "numeric", month: "short" });
+  };
+
+  const handleSessionClick = (sessionId: string) => {
+    // Select the session first
+    onSelectSession?.(sessionId);
+    // Navigate to home page if not already there
+    if (pathname !== "/") {
+      router.push("/");
+    }
+  };
+
+  const handleNewSession = () => {
+    // Create new session
+    onNewSession?.();
+    // Navigate to home page if not already there
+    if (pathname !== "/") {
+      router.push("/");
+    }
   };
 
   return (
@@ -70,7 +89,7 @@ export function Sidebar({
         </span>
       </Link>
       
-      <div className="flex-1 overflow-y-auto py-6 px-3">
+      <div className="flex-1 overflow-y-auto py-6 px-3 dark-scrollbar">
         <div className="mb-2 px-3">
           <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest">Navigation</span>
         </div>
@@ -128,7 +147,7 @@ export function Sidebar({
             <div className="space-y-1 animate-in slide-in-from-top-2 duration-200">
               {/* New Chat Button */}
               <button
-                onClick={onNewSession}
+                onClick={handleNewSession}
                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-white/5 rounded-md transition-colors"
               >
                 <Plus className="h-4 w-4" />
@@ -136,7 +155,7 @@ export function Sidebar({
               </button>
 
               {/* Session List */}
-              <div className="max-h-[300px] overflow-y-auto space-y-0.5 pr-1 scrollbar-thin scrollbar-thumb-white/10">
+              <div className="max-h-[300px] overflow-y-auto space-y-0.5 pr-1 dark-scrollbar">
                 {sessions.length === 0 ? (
                   <div className="px-3 py-3 text-xs text-slate-500">
                     Noch keine Unterhaltungen.
@@ -151,7 +170,7 @@ export function Sidebar({
                           ? "bg-white/10 text-white"
                           : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
                       )}
-                      onClick={() => onSelectSession?.(session.id)}
+                      onClick={() => handleSessionClick(session.id)}
                     >
                       <MessageCircle className="h-3.5 w-3.5 flex-shrink-0" />
                       <div className="flex-1 min-w-0">

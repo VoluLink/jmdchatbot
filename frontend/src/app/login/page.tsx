@@ -2,8 +2,9 @@
 
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { LogIn, Mail, Lock, AlertCircle } from "lucide-react";
+import { LogIn, Mail, Lock, AlertCircle, Smartphone } from "lucide-react";
 import Link from "next/link";
+import CodeVerificationInput from "@/components/CodeVerificationInput";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,6 +12,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // 2FA states
+  const [requiresTwoFa, setRequiresTwoFa] = useState(false);
+  const [sessionToken, setSessionToken] = useState("");
+  const [phoneNumberMasked, setPhoneNumberMasked] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -30,14 +37,63 @@ export default function LoginPage() {
         throw new Error(data.error || "Login failed");
       }
 
-      // Redirect to home
-      router.push("/");
-      router.refresh();
+      // Check if 2FA is required
+      if (data.requiresTwoFa) {
+        setRequiresTwoFa(true);
+        setSessionToken(data.sessionToken);
+        setPhoneNumberMasked(data.phoneNumberMasked || "");
+      } else {
+        // Regular login success - redirect to home
+        router.push("/");
+        router.refresh();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleVerify2FA = async (code: string) => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/auth/two-fa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionToken,
+          code,
+          purpose: "login",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Ungültiger Code");
+      }
+
+      if (data.success) {
+        // 2FA success - redirect to home
+        router.push("/");
+        router.refresh();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ungültiger Code");
+      setVerificationCode("");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBackToLogin = () => {
+    setRequiresTwoFa(false);
+    setSessionToken("");
+    setPhoneNumberMasked("");
+    setVerificationCode("");
+    setError("");
   };
 
   return (
@@ -51,7 +107,9 @@ export default function LoginPage() {
 
         {/* Login Card */}
         <div className="bg-white/5 border border-white/10 rounded-2xl shadow-2xl shadow-black/40 p-8 backdrop-blur-lg">
-          <h2 className="text-2xl font-semibold text-white mb-6">Anmelden</h2>
+          <h2 className="text-2xl font-semibold text-white mb-6">
+            {requiresTwoFa ? "Bestätigungscode eingeben" : "Anmelden"}
+          </h2>
 
           {error && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg flex items-start gap-3">
@@ -60,7 +118,8 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          {!requiresTwoFa ? (
+            <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 E-Mail
@@ -114,26 +173,73 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+          ) : (
+            /* 2FA Verification UI */
+            <div className="space-y-6">
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-600/20 rounded-full mb-4">
+                  <Smartphone className="w-8 h-8 text-indigo-400" />
+                </div>
+                <p className="text-slate-300 text-sm">
+                  Wir haben einen 6-stelligen Code an {phoneNumberMasked} gesendet.
+                  <br />
+                  Geben Sie den Code ein, um fortzufahren.
+                </p>
+              </div>
 
-          {/* Register Link */}
-          <div className="mt-6 text-center">
-            <p className="text-sm text-slate-400">
-              Noch kein Konto?{" "}
-              <Link
-                href="/register"
-                className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
-              >
-                Jetzt registrieren
-              </Link>
-            </p>
-          </div>
+              <CodeVerificationInput
+                value={verificationCode}
+                onChange={setVerificationCode}
+                onComplete={handleVerify2FA}
+                disabled={loading}
+                error={!!error}
+              />
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleBackToLogin}
+                  disabled={loading}
+                  className="flex-1 px-4 py-3 bg-white/10 hover:bg-white/15 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Zurück
+                </button>
+              </div>
+
+              <div className="text-center text-sm text-slate-400">
+                Keinen Code erhalten?{" "}
+                <Link
+                  href="/login/backup-code"
+                  className="text-indigo-400 hover:text-indigo-300 font-medium"
+                >
+                  Backup-Code verwenden
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* Register Link (only show when not in 2FA mode) */}
+          {!requiresTwoFa && (
+            <div className="mt-6 text-center">
+              <p className="text-sm text-slate-400">
+                Noch kein Konto?{" "}
+                <Link
+                  href="/register"
+                  className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
+                >
+                  Jetzt registrieren
+                </Link>
+              </p>
+            </div>
+          )}
 
           {/* Default Credentials (Development) */}
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <p className="text-xs text-slate-500 text-center">
-              Standard-Admin: admin@amiko.local / admin123
-            </p>
-          </div>
+          {!requiresTwoFa && (
+            <div className="mt-6 pt-6 border-t border-white/10">
+              <p className="text-xs text-slate-500 text-center">
+                Standard-Admin: admin@amiko.local / admin123
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

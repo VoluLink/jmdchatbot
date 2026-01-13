@@ -80,3 +80,7 @@ data/sources/*
 data/auth.db
 data/doc_metadata.json
 data/url_sources.json
+
+# Claude Code temporary files
+tmpclaude-*-cwd
+frontend/tmpclaude-*-cwd

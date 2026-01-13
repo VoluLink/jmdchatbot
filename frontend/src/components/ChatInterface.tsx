@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Bot, Paperclip, Mic, MessageSquare, Trash2, User, ExternalLink } from "lucide-react";
+import { Send, Bot, MessageSquare, Trash2, User, ExternalLink } from "lucide-react";
 import { cn, encodePathSegments } from "@/lib/utils";
 import { useChatHistoryContext } from "./ClientLayout";
 import Link from "next/link";
@@ -333,18 +333,11 @@ export function ChatInterface() {
         <div ref={messagesEndRef} className="h-4" />
       </div>
 
-      <div className="pb-6 pt-2 px-4 z-10 w-full max-w-4xl mx-auto"> 
+      <div className="pb-6 pt-2 px-4 z-10 w-full max-w-4xl mx-auto">
         <div className="relative">
-          <div 
+          <div
             className="relative flex items-end gap-2 bg-transparent border border-white/15 rounded-[26px] p-2 transition-colors focus-within:border-white/25 bg-white/5 backdrop-blur-sm"
           >
-            <button
-              type="button"
-              className="p-3 text-slate-200 hover:text-slate-100 rounded-full transition-colors mb-0.5"
-            >
-              <Paperclip className="h-5 w-5" />
-            </button>
-            
             <textarea
               ref={inputRef}
               value={input}
@@ -355,28 +348,19 @@ export function ChatInterface() {
               }}
               onKeyDown={handleKeyDown}
               placeholder="Frag mich etwas..."
-              className="flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 text-slate-100 placeholder:text-slate-400 py-3.5 px-2 text-[15px] resize-none max-h-[120px] overflow-y-auto scrollbar-none"
+              className="flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 text-slate-100 placeholder:text-slate-400 py-3.5 px-4 text-[15px] resize-none max-h-[120px] overflow-y-auto scrollbar-none"
               disabled={isLoading}
               rows={1}
               style={{ minHeight: '48px' }}
             />
-            
-            {!input.trim() ? (
-              <button
-                type="button"
-                className="p-3 text-slate-200 hover:text-slate-100 rounded-full transition-colors mb-0.5"
-              >
-                <Mic className="h-5 w-5" />
-              </button>
-            ) : (
-              <button
-                onClick={handleSubmit}
-                disabled={isLoading}
-                className="p-2.5 bg-gray-900 text-white rounded-full hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed m-0.5 mb-1"
-              >
-                <Send className="h-4 w-4" />
-              </button>
-            )}
+
+            <button
+              onClick={handleSubmit}
+              disabled={isLoading || !input.trim()}
+              className="p-2.5 bg-gray-900 text-white rounded-full hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed m-0.5 mb-1"
+            >
+              <Send className="h-4 w-4" />
+            </button>
           </div>
             <div className="text-center mt-3">
               <p className="text-[11px] text-slate-400 font-medium tracking-wide">

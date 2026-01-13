@@ -46,33 +46,101 @@ export async function POST(request: NextRequest) {
           try {
             const user = JSON.parse(stdout);
 
-            // Create JWT token
-            const token = await new SignJWT({ userId: user.id, email: user.email, role: user.role })
-              .setProtectedHeader({ alg: "HS256" })
-              .setIssuedAt()
-              .setExpirationTime("7d")
-              .sign(JWT_SECRET);
+            // Check if 2FA is enabled
+            if (user.twoFaEnabled) {
+              // Create pending 2FA session and send verification code
+              const createSessionProcess = spawn(
+                "python",
+                ["-c", `
+import sys
+import json
+from src.auth.two_fa_manager import create_pending_session, send_verification_code, mask_phone_number
 
-            const response = NextResponse.json({
-              success: true,
-              user: {
-                id: user.id,
-                email: user.email,
-                name: user.name,
-                role: user.role,
-              },
-            });
+user_id = sys.argv[1]
+session_token = create_pending_session(user_id, expiry_minutes=15)
+send_result = send_verification_code(user_id, "login")
 
-            // Set HTTP-only cookie
-            response.cookies.set("auth-token", token, {
-              httpOnly: true,
-              secure: process.env.NODE_ENV === "production",
-              sameSite: "lax",
-              maxAge: 60 * 60 * 24 * 7, // 7 days
-              path: "/",
-            });
+# Get masked phone number
+from src.auth.user_manager import find_user_by_id
+user_data = find_user_by_id(user_id)
+phone_masked = mask_phone_number(user_data.get("phoneNumber", "")) if user_data else ""
 
-            resolve(response);
+print(json.dumps({
+    "session_token": session_token,
+    "phone_masked": phone_masked,
+    "send_success": send_result.get("success", False)
+}))
+                `.trim(), user.id],
+                {
+                  cwd: path.join(process.cwd(), ".."),
+                }
+              );
+
+              let sessionStdout = "";
+
+              createSessionProcess.stdout?.on("data", (data) => {
+                sessionStdout += data.toString();
+              });
+
+              createSessionProcess.on("close", (sessionCode) => {
+                if (sessionCode === 0) {
+                  try {
+                    const sessionData = JSON.parse(sessionStdout);
+
+                    resolve(
+                      NextResponse.json({
+                        requiresTwoFa: true,
+                        sessionToken: sessionData.session_token,
+                        phoneNumberMasked: sessionData.phone_masked,
+                      })
+                    );
+                  } catch {
+                    resolve(
+                      NextResponse.json(
+                        { error: "Failed to initiate 2FA" },
+                        { status: 500 }
+                      )
+                    );
+                  }
+                } else {
+                  resolve(
+                    NextResponse.json(
+                      { error: "Failed to initiate 2FA" },
+                      { status: 500 }
+                    )
+                  );
+                }
+              });
+            } else {
+              // No 2FA - proceed with regular login
+              // Create JWT token
+              const token = await new SignJWT({ userId: user.id, email: user.email, role: user.role })
+                .setProtectedHeader({ alg: "HS256" })
+                .setIssuedAt()
+                .setExpirationTime("7d")
+                .sign(JWT_SECRET);
+
+              const response = NextResponse.json({
+                success: true,
+                user: {
+                  id: user.id,
+                  email: user.email,
+                  name: user.name,
+                  role: user.role,
+                },
+              });
+
+              // Set HTTP-only cookie
+              response.cookies.set("auth-token", token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "lax",
+                maxAge: 60 * 60 * 24 * 7, // 7 days
+                path: "/",
+              });
+
+              resolve(response);
+            }
           } catch {
             resolve(
               NextResponse.json(

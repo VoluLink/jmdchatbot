@@ -26,13 +26,16 @@ def find_user_by_email(email: str) -> Optional[Dict]:
     """Find a user by email."""
     conn = get_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
-        SELECT id, email, name, password_hash as passwordHash, role, created_at as createdAt, last_login as lastLogin
-        FROM users 
+        SELECT id, email, name, password_hash as passwordHash, role,
+               created_at as createdAt, last_login as lastLogin,
+               two_fa_enabled as twoFaEnabled, phone_number as phoneNumber,
+               phone_country_code as phoneCountryCode, two_fa_enrolled_at as twoFaEnrolledAt
+        FROM users
         WHERE LOWER(email) = LOWER(?) AND is_active = 1
     """, (email,))
-    
+
     row = cursor.fetchone()
     return dict_from_row(row) if row else None
 
@@ -41,13 +44,15 @@ def find_user_by_id(user_id: str) -> Optional[Dict]:
     """Find a user by ID."""
     conn = get_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
-        SELECT id, email, name, role, created_at as createdAt, last_login as lastLogin
-        FROM users 
+        SELECT id, email, name, role, created_at as createdAt, last_login as lastLogin,
+               two_fa_enabled as twoFaEnabled, phone_number as phoneNumber,
+               phone_country_code as phoneCountryCode, two_fa_enrolled_at as twoFaEnrolledAt
+        FROM users
         WHERE id = ? AND is_active = 1
     """, (user_id,))
-    
+
     row = cursor.fetchone()
     return dict_from_row(row) if row else None
 
@@ -132,14 +137,16 @@ def list_users() -> List[Dict]:
     """List all active users (without password hashes)."""
     conn = get_connection()
     cursor = conn.cursor()
-    
+
     cursor.execute("""
-        SELECT id, email, name, role, created_at as createdAt, last_login as lastLogin
-        FROM users 
+        SELECT id, email, name, role, created_at as createdAt, last_login as lastLogin,
+               two_fa_enabled as twoFaEnabled, phone_number as phoneNumber,
+               phone_country_code as phoneCountryCode, two_fa_enrolled_at as twoFaEnrolledAt
+        FROM users
         WHERE is_active = 1
         ORDER BY created_at DESC
     """)
-    
+
     rows = cursor.fetchall()
     return [dict_from_row(row) for row in rows]
 
