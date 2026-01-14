@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import PhoneNumberInput from "./PhoneNumberInput";
-import CodeVerificationInput from "./CodeVerificationInput";
+import { Copy, Check, Download, Smartphone, QrCode } from "lucide-react";
 import BackupCodesDisplay from "./BackupCodesDisplay";
 
 interface TwoFaSetupModalProps {
@@ -12,7 +11,7 @@ interface TwoFaSetupModalProps {
   userId: string;
 }
 
-type Step = "phone" | "verify" | "backup";
+type Step = "qr" | "verify" | "backup";
 
 export default function TwoFaSetupModal({
   isOpen,
@@ -20,59 +19,46 @@ export default function TwoFaSetupModal({
   onSuccess,
   userId,
 }: TwoFaSetupModalProps) {
-  const [step, setStep] = useState<Step>("phone");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [countryCode, setCountryCode] = useState("+49");
+  const [step, setStep] = useState<Step>("qr");
+  const [qrCodeBase64, setQrCodeBase64] = useState("");
+  const [manualEntryKey, setManualEntryKey] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [expiresIn, setExpiresIn] = useState<number>(0);
+  const [copied, setCopied] = useState(false);
 
-  // Reset state when modal opens
+  // Reset state when modal opens and generate QR code
   useEffect(() => {
     if (isOpen) {
-      setStep("phone");
-      setPhoneNumber("");
-      setCountryCode("+49");
+      setStep("qr");
+      setQrCodeBase64("");
+      setManualEntryKey("");
       setVerificationCode("");
       setBackupCodes([]);
       setError("");
-      setExpiresIn(0);
+      setCopied(false);
+      handleGenerateQR();
     }
   }, [isOpen]);
 
-  // Countdown timer for code expiration
-  useEffect(() => {
-    if (step === "verify" && expiresIn > 0) {
-      const timer = setInterval(() => {
-        setExpiresIn((prev) => Math.max(0, prev - 1));
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [step, expiresIn]);
-
-  const handleSendCode = async () => {
+  const handleGenerateQR = async () => {
     setLoading(true);
     setError("");
 
     try {
-      const response = await fetch("/api/auth/two-fa/send-code", {
+      const response = await fetch("/api/auth/two-fa/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          purpose: "setup",
-        }),
       });
 
       const data = await response.json();
 
       if (response.ok && data.success) {
-        setExpiresIn(data.expiresIn);
-        setStep("verify");
+        setQrCodeBase64(data.qrCodeBase64);
+        setManualEntryKey(data.manualEntryKey);
       } else {
-        setError(data.error || "Fehler beim Senden des Codes");
+        setError(data.error || "Fehler beim Generieren des QR-Codes");
       }
     } catch (err) {
       setError("Netzwerkfehler. Bitte versuchen Sie es erneut.");
@@ -81,7 +67,12 @@ export default function TwoFaSetupModal({
     }
   };
 
-  const handleVerifyAndEnable = async (code: string) => {
+  const handleVerifyAndEnable = async () => {
+    if (verificationCode.length !== 6) {
+      setError("Bitte geben Sie einen 6-stelligen Code ein");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -90,9 +81,7 @@ export default function TwoFaSetupModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phoneNumber,
-          countryCode,
-          verificationCode: code,
+          verificationCode,
         }),
       });
 
@@ -117,10 +106,10 @@ export default function TwoFaSetupModal({
     onClose();
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  const handleCopyKey = () => {
+    navigator.clipboard.writeText(manualEntryKey.replace(/\s/g, ""));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   if (!isOpen) return null;
@@ -151,8 +140,8 @@ export default function TwoFaSetupModal({
 
         {/* Progress Steps */}
         <div className="flex items-center justify-center gap-2 p-6 bg-slate-50 dark:bg-slate-900/50">
-          {["phone", "verify", "backup"].map((s, index) => {
-            const currentIndex = ["phone", "verify", "backup"].indexOf(step);
+          {["qr", "verify", "backup"].map((s, index) => {
+            const currentIndex = ["qr", "verify", "backup"].indexOf(step);
             const stepIndex = index;
             const isActive = stepIndex === currentIndex;
             const isCompleted = stepIndex < currentIndex;
@@ -184,34 +173,90 @@ export default function TwoFaSetupModal({
 
         {/* Content */}
         <div className="p-6">
-          {/* Step 1: Phone Number */}
-          {step === "phone" && (
+          {/* Step 1: Scan QR Code */}
+          {step === "qr" && (
             <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
-                  Schritt 1: Telefonnummer eingeben
+                  Schritt 1: Authenticator-App einrichten
                 </h3>
-                <p className="text-slate-600 dark:text-slate-400">
-                  Geben Sie Ihre Telefonnummer ein. Sie erhalten einen Bestätigungscode per SMS.
+                <p className="text-slate-600 dark:text-slate-400 mb-4">
+                  Scannen Sie den QR-Code mit einer Authenticator-App:
                 </p>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">
+                    <Smartphone className="w-3 h-3" />
+                    Google Authenticator
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">
+                    <Smartphone className="w-3 h-3" />
+                    Microsoft Authenticator
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">
+                    <Smartphone className="w-3 h-3" />
+                    Authy
+                  </span>
+                </div>
               </div>
 
-              <PhoneNumberInput
-                value={phoneNumber}
-                onChange={setPhoneNumber}
-                countryCode={countryCode}
-                onCountryCodeChange={setCountryCode}
-                disabled={loading}
-                error={error}
-              />
+              {loading && !qrCodeBase64 ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-8 h-8 border-4 border-slate-300 border-t-blue-600 rounded-full animate-spin" />
+                </div>
+              ) : qrCodeBase64 ? (
+                <>
+                  {/* QR Code */}
+                  <div className="flex flex-col items-center space-y-4">
+                    <div className="p-4 bg-white rounded-lg border-2 border-slate-200 dark:border-slate-700">
+                      <img
+                        src={`data:image/png;base64,${qrCodeBase64}`}
+                        alt="QR Code"
+                        className="w-64 h-64"
+                      />
+                    </div>
 
-              <button
-                onClick={handleSendCode}
-                disabled={!phoneNumber || loading}
-                className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors"
-              >
-                {loading ? "Wird gesendet..." : "Code senden"}
-              </button>
+                    {/* Manual Entry */}
+                    <div className="w-full">
+                      <p className="text-sm text-slate-600 dark:text-slate-400 mb-2 text-center">
+                        Oder geben Sie diesen Schlüssel manuell ein:
+                      </p>
+                      <div className="flex items-center gap-2 p-3 bg-slate-100 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <code className="flex-1 text-sm font-mono text-slate-900 dark:text-slate-100 break-all">
+                          {manualEntryKey}
+                        </code>
+                        <button
+                          onClick={handleCopyKey}
+                          className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors flex-shrink-0"
+                          title="Kopieren"
+                        >
+                          {copied ? (
+                            <Check className="w-4 h-4 text-green-600" />
+                          ) : (
+                            <Copy className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setStep("verify")}
+                    className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+                  >
+                    Weiter zur Verifizierung
+                  </button>
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
+                  <button
+                    onClick={handleGenerateQR}
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+                  >
+                    Erneut versuchen
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -220,27 +265,30 @@ export default function TwoFaSetupModal({
             <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
-                  Schritt 2: Code eingeben
+                  Schritt 2: Code verifizieren
                 </h3>
                 <p className="text-slate-600 dark:text-slate-400">
-                  Geben Sie den 6-stelligen Code ein, den wir an {countryCode} {phoneNumber} gesendet haben.
+                  Geben Sie den 6-stelligen Code aus Ihrer Authenticator-App ein:
                 </p>
               </div>
 
               <div className="space-y-4">
-                <CodeVerificationInput
-                  value={verificationCode}
-                  onChange={setVerificationCode}
-                  onComplete={handleVerifyAndEnable}
-                  disabled={loading}
-                  error={!!error}
-                />
-
-                {expiresIn > 0 && (
-                  <p className="text-center text-sm text-slate-600 dark:text-slate-400">
-                    Code läuft ab in: <span className="font-semibold">{formatTime(expiresIn)}</span>
-                  </p>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Verifizierungscode
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
+                    placeholder="000000"
+                    disabled={loading}
+                    className="w-full px-4 py-3 text-center text-2xl font-mono tracking-widest bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    autoFocus
+                  />
+                </div>
 
                 {error && (
                   <p className="text-center text-sm text-red-600 dark:text-red-400">{error}</p>
@@ -249,18 +297,18 @@ export default function TwoFaSetupModal({
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => setStep("phone")}
+                  onClick={() => setStep("qr")}
                   disabled={loading}
                   className="flex-1 px-6 py-3 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-900 dark:text-slate-100 rounded-lg font-semibold transition-colors disabled:opacity-50"
                 >
                   Zurück
                 </button>
                 <button
-                  onClick={handleSendCode}
-                  disabled={loading || expiresIn > 540}
-                  className="flex-1 px-6 py-3 bg-slate-600 hover:bg-slate-700 disabled:bg-slate-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors"
+                  onClick={handleVerifyAndEnable}
+                  disabled={loading || verificationCode.length !== 6}
+                  className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition-colors"
                 >
-                  {loading ? "Wird gesendet..." : "Code erneut senden"}
+                  {loading ? "Wird verifiziert..." : "Verifizieren & Aktivieren"}
                 </button>
               </div>
             </div>
@@ -274,7 +322,7 @@ export default function TwoFaSetupModal({
                   Schritt 3: Backup-Codes speichern
                 </h3>
                 <p className="text-slate-600 dark:text-slate-400">
-                  Bewahren Sie diese Codes sicher auf. Sie können damit auf Ihr Konto zugreifen, falls Sie Ihr Telefon verlieren.
+                  Bewahren Sie diese Codes sicher auf. Sie können damit auf Ihr Konto zugreifen, falls Sie keinen Zugriff auf Ihre Authenticator-App haben.
                 </p>
               </div>
 

@@ -16,7 +16,6 @@ export default function LoginPage() {
   // 2FA states
   const [requiresTwoFa, setRequiresTwoFa] = useState(false);
   const [sessionToken, setSessionToken] = useState("");
-  const [phoneNumberMasked, setPhoneNumberMasked] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
 
   const handleSubmit = async (e: FormEvent) => {
@@ -41,7 +40,6 @@ export default function LoginPage() {
       if (data.requiresTwoFa) {
         setRequiresTwoFa(true);
         setSessionToken(data.sessionToken);
-        setPhoneNumberMasked(data.phoneNumberMasked || "");
       } else {
         // Regular login success - redirect to home
         router.push("/");
@@ -91,7 +89,6 @@ export default function LoginPage() {
   const handleBackToLogin = () => {
     setRequiresTwoFa(false);
     setSessionToken("");
-    setPhoneNumberMasked("");
     setVerificationCode("");
     setError("");
   };
@@ -180,10 +177,9 @@ export default function LoginPage() {
                 <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-600/20 rounded-full mb-4">
                   <Smartphone className="w-8 h-8 text-indigo-400" />
                 </div>
+                <h3 className="text-xl font-semibold text-white mb-2">Zwei-Faktor-Authentifizierung</h3>
                 <p className="text-slate-300 text-sm">
-                  Wir haben einen 6-stelligen Code an {phoneNumberMasked} gesendet.
-                  <br />
-                  Geben Sie den Code ein, um fortzufahren.
+                  Öffnen Sie Ihre Authenticator-App und geben Sie den 6-stelligen Code ein.
                 </p>
               </div>
 

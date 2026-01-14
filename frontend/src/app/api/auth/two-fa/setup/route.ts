@@ -7,7 +7,7 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "your-secret-key-change-in-production"
 );
 
-// POST - Enable 2FA after verifying TOTP code
+// POST - Setup TOTP 2FA (generate QR code)
 export async function POST(request: NextRequest) {
   try {
     // Verify JWT
@@ -22,22 +22,13 @@ export async function POST(request: NextRequest) {
 
     const verified = await jwtVerify(token, JWT_SECRET);
     const userId = verified.payload.userId as string;
+    const userEmail = verified.payload.email as string;
 
-    const body = await request.json();
-    const { verificationCode } = body;
-
-    if (!verificationCode || verificationCode.length !== 6) {
-      return NextResponse.json(
-        { error: "Valid 6-digit verification code required" },
-        { status: 400 }
-      );
-    }
-
-    // Call Python script to enable 2FA
+    // Call Python script to setup TOTP
     return new Promise((resolve) => {
-      const enableProcess = spawn(
+      const setupProcess = spawn(
         "python",
-        ["-m", "src.auth.two_fa_enable", userId, verificationCode],
+        ["-m", "src.auth.two_fa_setup", userId, userEmail],
         {
           cwd: path.join(process.cwd(), ".."),
         }
@@ -46,15 +37,15 @@ export async function POST(request: NextRequest) {
       let stdout = "";
       let stderr = "";
 
-      enableProcess.stdout?.on("data", (data) => {
+      setupProcess.stdout?.on("data", (data) => {
         stdout += data.toString();
       });
 
-      enableProcess.stderr?.on("data", (data) => {
+      setupProcess.stderr?.on("data", (data) => {
         stderr += data.toString();
       });
 
-      enableProcess.on("close", (code) => {
+      setupProcess.on("close", (code) => {
         if (code === 0) {
           try {
             const result = JSON.parse(stdout);
@@ -63,52 +54,42 @@ export async function POST(request: NextRequest) {
               resolve(
                 NextResponse.json({
                   success: true,
-                  backupCodes: result.backup_codes,
+                  qrCodeBase64: result.qr_code_base64,
+                  manualEntryKey: result.manual_entry_key,
                 })
               );
             } else {
               resolve(
                 NextResponse.json(
-                  { error: result.error || "Failed to enable 2FA" },
+                  { error: result.error || "Failed to setup 2FA" },
                   { status: 400 }
                 )
               );
             }
           } catch (err) {
-            console.error("Failed to parse enable output:", stdout, stderr);
+            console.error("Failed to parse setup output:", stdout, stderr);
             resolve(
               NextResponse.json(
-                { error: "Failed to enable 2FA" },
+                { error: "Failed to setup 2FA" },
                 { status: 500 }
               )
             );
           }
         } else {
-          // Try to parse error from stdout
-          try {
-            const result = JSON.parse(stdout);
-            resolve(
-              NextResponse.json(
-                { error: result.error || "Failed to enable 2FA" },
-                { status: 400 }
-              )
-            );
-          } catch {
-            console.error("Enable process failed:", stderr);
-            resolve(
-              NextResponse.json(
-                { error: "Invalid verification code" },
-                { status: 400 }
-              )
-            );
-          }
+          console.error("Setup process failed:", stderr);
+          resolve(
+            NextResponse.json(
+              { error: "Failed to setup 2FA" },
+              { status: 500 }
+            )
+          );
         }
       });
     });
   } catch (error) {
-    console.error("Error enabling 2FA:", error);
+    console.error("Error setting up 2FA:", error);
     return NextResponse.json(
-      { error: "Failed to enable 2FA" },
+      { error: "Failed to setup 2FA" },
       { status: 500 }
     );
   }

@@ -51,48 +51,35 @@ print(json.dumps(user if user else {}))
   });
 }
 
-// POST - Verify 2FA code
+// POST - Verify 2FA TOTP code or backup code during login
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, sessionToken, code, purpose } = body;
+    const { sessionToken, code } = body;
 
-    if (!code || !purpose) {
+    if (!sessionToken || !code) {
       return NextResponse.json(
-        { error: "Code and purpose are required" },
+        { error: "Session token and code are required" },
         { status: 400 }
       );
     }
 
-    // For login flow, we need sessionToken. For setup/verification, we need userId
-    let verifyUserId = userId;
-    let userInfo = null;
-
-    if (purpose === "login" && sessionToken) {
-      // Verify pending session and get user info
-      try {
-        userInfo = await verifyPendingSession(sessionToken);
-        verifyUserId = userInfo.id;
-      } catch (error) {
-        return NextResponse.json(
-          { error: "Invalid or expired session" },
-          { status: 401 }
-        );
-      }
-    }
-
-    if (!verifyUserId) {
+    // Verify pending session and get user info
+    let userInfo;
+    try {
+      userInfo = await verifyPendingSession(sessionToken);
+    } catch (error) {
       return NextResponse.json(
-        { error: "User ID or session token is required" },
-        { status: 400 }
+        { error: "Invalid or expired session" },
+        { status: 401 }
       );
     }
 
-    // Call Python script to verify code
+    // Call Python script to verify TOTP code or backup code
     return new Promise((resolve) => {
       const pythonProcess = spawn(
         "python",
-        ["-m", "src.auth.two_fa_verify_code", verifyUserId, code, purpose],
+        ["-m", "src.auth.two_fa_verify_login", userInfo.id, code],
         {
           cwd: path.join(process.cwd(), ".."),
         }
@@ -109,67 +96,57 @@ export async function POST(request: NextRequest) {
         stderr += data.toString();
       });
 
-      pythonProcess.on("close", async (code) => {
-        if (code === 0) {
+      pythonProcess.on("close", async (verifyCode) => {
+        if (verifyCode === 0) {
           try {
             const result = JSON.parse(stdout);
 
             if (result.success) {
-              // If this is a login verification, create JWT and set cookie
-              if (purpose === "login" && userInfo && sessionToken) {
-                // Consume the pending session
-                const consumeProcess = spawn(
-                  "python",
-                  ["-c", `
+              // Consume the pending session
+              const consumeProcess = spawn(
+                "python",
+                ["-c", `
 from src.auth.two_fa_manager import consume_pending_session
 consume_pending_session("${sessionToken}")
-                  `.trim()],
-                  {
-                    cwd: path.join(process.cwd(), ".."),
-                  }
-                );
+                `.trim()],
+                {
+                  cwd: path.join(process.cwd(), ".."),
+                }
+              );
 
-                consumeProcess.on("close", async () => {
-                  // Create JWT token
-                  const token = await new SignJWT({
-                    userId: userInfo.id,
+              consumeProcess.on("close", async () => {
+                // Create JWT token
+                const token = await new SignJWT({
+                  userId: userInfo.id,
+                  email: userInfo.email,
+                  role: userInfo.role
+                })
+                  .setProtectedHeader({ alg: "HS256" })
+                  .setIssuedAt()
+                  .setExpirationTime("7d")
+                  .sign(JWT_SECRET);
+
+                const response = NextResponse.json({
+                  success: true,
+                  user: {
+                    id: userInfo.id,
                     email: userInfo.email,
-                    role: userInfo.role
-                  })
-                    .setProtectedHeader({ alg: "HS256" })
-                    .setIssuedAt()
-                    .setExpirationTime("7d")
-                    .sign(JWT_SECRET);
-
-                  const response = NextResponse.json({
-                    success: true,
-                    user: {
-                      id: userInfo.id,
-                      email: userInfo.email,
-                      name: userInfo.name,
-                      role: userInfo.role,
-                    },
-                  });
-
-                  // Set HTTP-only cookie
-                  response.cookies.set("auth-token", token, {
-                    httpOnly: true,
-                    secure: process.env.NODE_ENV === "production",
-                    sameSite: "lax",
-                    maxAge: 60 * 60 * 24 * 7, // 7 days
-                    path: "/",
-                  });
-
-                  resolve(response);
+                    name: userInfo.name,
+                    role: userInfo.role,
+                  },
                 });
-              } else {
-                // For non-login verifications, just return success
-                resolve(
-                  NextResponse.json({
-                    success: true,
-                  })
-                );
-              }
+
+                // Set HTTP-only cookie
+                response.cookies.set("auth-token", token, {
+                  httpOnly: true,
+                  secure: process.env.NODE_ENV === "production",
+                  sameSite: "lax",
+                  maxAge: 60 * 60 * 24 * 7, // 7 days
+                  path: "/",
+                });
+
+                resolve(response);
+              });
             } else {
               resolve(
                 NextResponse.json(
@@ -178,7 +155,8 @@ consume_pending_session("${sessionToken}")
                 )
               );
             }
-          } catch {
+          } catch (err) {
+            console.error("Failed to parse verify output:", err, stdout, stderr);
             resolve(
               NextResponse.json(
                 { error: "Failed to verify code" },

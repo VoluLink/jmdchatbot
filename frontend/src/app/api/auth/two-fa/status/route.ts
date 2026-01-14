@@ -55,7 +55,6 @@ print(json.dumps(status))
             resolve(
               NextResponse.json({
                 enabled: status.enabled,
-                phoneNumberMasked: status.phone_masked,
                 enrolledAt: status.enrolled_at,
                 backupCodesRemaining: status.backup_codes_remaining,
               })

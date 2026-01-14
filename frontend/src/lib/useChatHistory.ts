@@ -52,6 +52,16 @@ export function useChatHistory() {
   const currentSession = sessions.find((s) => s.id === currentSessionId) || null;
 
   const createSession = useCallback(() => {
+    // Check if there's already an empty session
+    const existingEmptySession = sessions.find((s) => s.messages.length === 0);
+
+    if (existingEmptySession) {
+      // Reuse the existing empty session instead of creating a new one
+      setCurrentSessionId(existingEmptySession.id);
+      return existingEmptySession;
+    }
+
+    // No empty session found, create a new one
     const newSession: ChatSession = {
       id: Date.now().toString(),
       title: "Neue Unterhaltung",
@@ -62,7 +72,7 @@ export function useChatHistory() {
     setSessions((prev) => [newSession, ...prev]);
     setCurrentSessionId(newSession.id);
     return newSession;
-  }, []);
+  }, [sessions]);
 
   const updateSession = useCallback(
     (sessionId: string, messages: ChatMessage[]) => {

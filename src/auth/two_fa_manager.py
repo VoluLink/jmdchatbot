@@ -8,12 +8,7 @@ from typing import Dict, List, Optional
 import bcrypt
 
 from src.auth.database import get_connection
-from src.auth.twilio_service import (
-    format_phone_e164,
-    validate_phone_number,
-    mask_phone_number,
-    get_send_function,
-)
+from src.auth.totp_service import setup_totp_for_user, verify_totp_code
 
 
 # ============================================================================
@@ -457,51 +452,93 @@ def cleanup_expired_sessions() -> int:
 # 2FA Settings Management
 # ============================================================================
 
-def enable_two_fa(user_id: str, phone_number: str, country_code: str = "+49") -> Dict:
+def setup_two_fa(user_id: str, user_email: str) -> Dict:
     """
-    Enable 2FA for a user.
+    Setup TOTP 2FA for a user (Step 1: Generate QR code).
+
+    This generates the TOTP secret and QR code but does NOT enable 2FA yet.
+    User must scan the QR code and verify with a code first.
 
     Args:
         user_id: User ID
-        phone_number: User's phone number
-        country_code: Country code (default "+49")
+        user_email: User's email address (shown in authenticator app)
 
     Returns:
-        dict with keys: success, backup_codes, phone_masked
-
-    Raises:
-        ValueError: If phone number is invalid
+        dict with keys: qr_code_base64, manual_entry_key, secret
     """
-    # Validate and format phone number
-    if not validate_phone_number(phone_number, country_code):
-        raise ValueError("Invalid phone number")
+    # Generate TOTP secret and QR code
+    totp_data = setup_totp_for_user(user_email)
 
-    phone_e164 = format_phone_e164(phone_number, country_code)
-
+    # Store secret in database (but don't enable 2FA yet)
     conn = get_connection()
     cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE users
+        SET totp_secret = ?
+        WHERE id = ?
+    """, (totp_data["secret"], user_id))
+
+    conn.commit()
+
+    return {
+        "qr_code_base64": totp_data["qr_code_base64"],
+        "manual_entry_key": totp_data["manual_entry_key"],
+        "secret": totp_data["secret"],
+    }
+
+
+def enable_two_fa(user_id: str, verification_code: str) -> Dict:
+    """
+    Enable 2FA for a user (Step 2: Verify code and enable).
+
+    User must provide a valid TOTP code from their authenticator app
+    to prove they've successfully set it up.
+
+    Args:
+        user_id: User ID
+        verification_code: 6-digit code from authenticator app
+
+    Returns:
+        dict with keys: success, backup_codes
+
+    Raises:
+        ValueError: If code is invalid or TOTP not set up
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Get user's TOTP secret
+    cursor.execute("SELECT totp_secret FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+
+    if not row or not row[0]:
+        raise ValueError("TOTP not set up. Call setup_two_fa first.")
+
+    totp_secret = row[0]
+
+    # Verify the code
+    if not verify_totp_code(totp_secret, verification_code):
+        raise ValueError("Invalid verification code")
 
     # Generate backup codes
     backup_codes = generate_backup_codes(8)
     store_backup_codes(user_id, backup_codes)
 
-    # Update user record
+    # Enable 2FA
     now = datetime.now().isoformat()
     cursor.execute("""
         UPDATE users
-        SET phone_number = ?,
-            phone_country_code = ?,
-            two_fa_enabled = 1,
+        SET two_fa_enabled = 1,
             two_fa_enrolled_at = ?
         WHERE id = ?
-    """, (phone_e164, country_code, now, user_id))
+    """, (now, user_id))
 
     conn.commit()
 
     return {
         "success": True,
         "backup_codes": backup_codes,
-        "phone_masked": mask_phone_number(phone_e164),
     }
 
 
@@ -521,8 +558,7 @@ def disable_two_fa(user_id: str) -> bool:
     # Clear 2FA fields
     cursor.execute("""
         UPDATE users
-        SET phone_number = NULL,
-            phone_country_code = NULL,
+        SET totp_secret = NULL,
             two_fa_enabled = 0,
             two_fa_enrolled_at = NULL
         WHERE id = ?
@@ -539,57 +575,6 @@ def disable_two_fa(user_id: str) -> bool:
     return True
 
 
-def update_phone_number(user_id: str, phone_number: str, country_code: str = "+49") -> Dict:
-    """
-    Update user's phone number for 2FA.
-
-    Args:
-        user_id: User ID
-        phone_number: New phone number
-        country_code: Country code (default "+49")
-
-    Returns:
-        dict with keys: success, phone_masked
-
-    Raises:
-        ValueError: If phone number is invalid or 2FA not enabled
-    """
-    # Validate and format phone number
-    if not validate_phone_number(phone_number, country_code):
-        raise ValueError("Invalid phone number")
-
-    phone_e164 = format_phone_e164(phone_number, country_code)
-
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    # Check if 2FA is enabled
-    cursor.execute("""
-        SELECT two_fa_enabled
-        FROM users
-        WHERE id = ?
-    """, (user_id,))
-
-    row = cursor.fetchone()
-    if not row or not row[0]:
-        raise ValueError("2FA not enabled for this user")
-
-    # Update phone number
-    cursor.execute("""
-        UPDATE users
-        SET phone_number = ?,
-            phone_country_code = ?
-        WHERE id = ?
-    """, (phone_e164, country_code, user_id))
-
-    conn.commit()
-
-    return {
-        "success": True,
-        "phone_masked": mask_phone_number(phone_e164),
-    }
-
-
 def get_two_fa_status(user_id: str) -> Dict:
     """
     Get 2FA status for a user.
@@ -598,13 +583,13 @@ def get_two_fa_status(user_id: str) -> Dict:
         user_id: User ID
 
     Returns:
-        dict with keys: enabled, phone_masked, enrolled_at, backup_codes_remaining
+        dict with keys: enabled, enrolled_at, backup_codes_remaining
     """
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT two_fa_enabled, phone_number, two_fa_enrolled_at
+        SELECT two_fa_enabled, two_fa_enrolled_at
         FROM users
         WHERE id = ?
     """, (user_id,))
@@ -613,19 +598,52 @@ def get_two_fa_status(user_id: str) -> Dict:
     if not row:
         return {
             "enabled": False,
-            "phone_masked": None,
             "enrolled_at": None,
             "backup_codes_remaining": 0,
         }
 
-    two_fa_enabled, phone_number, enrolled_at = row
+    two_fa_enabled, enrolled_at = row
 
     return {
         "enabled": bool(two_fa_enabled),
-        "phone_masked": mask_phone_number(phone_number) if phone_number else None,
         "enrolled_at": enrolled_at,
         "backup_codes_remaining": get_backup_codes_remaining(user_id) if two_fa_enabled else 0,
     }
+
+
+def verify_two_fa_login(user_id: str, code: str) -> bool:
+    """
+    Verify a TOTP code or backup code during login.
+
+    Args:
+        user_id: User ID
+        code: 6-digit TOTP code or backup code (format: XXXX-XXXX-XXXX)
+
+    Returns:
+        True if code is valid, False otherwise
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Get user's TOTP secret
+    cursor.execute("SELECT totp_secret, two_fa_enabled FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+
+    if not row or not row[1]:  # 2FA not enabled
+        return False
+
+    totp_secret = row[0]
+
+    # Try TOTP code first (6 digits)
+    if len(code) == 6 and code.isdigit():
+        if verify_totp_code(totp_secret, code):
+            return True
+
+    # Try backup code (format: XXXX-XXXX-XXXX)
+    if "-" in code:
+        return verify_backup_code(user_id, code)
+
+    return False
 
 
 # ============================================================================

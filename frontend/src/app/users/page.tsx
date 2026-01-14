@@ -1,17 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { 
-  UserPlus, 
-  Trash2, 
-  User as UserIcon, 
-  Mail, 
+import {
+  UserPlus,
+  Trash2,
+  User as UserIcon,
+  Mail,
   Crown,
   Users,
   Search,
   RefreshCw,
   Shield,
   X,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -38,6 +40,7 @@ export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [modal, setModal] = useState<ModalType>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [resetPasswordStatus, setResetPasswordStatus] = useState<Record<string, "idle" | "sending" | "sent" | "error">>({});
 
   const fetchUsers = async () => {
     try {
@@ -89,6 +92,35 @@ export default function UsersPage() {
       setError(err instanceof Error ? err.message : "Failed to delete user");
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const handleSendPasswordReset = async (userId: string, userEmail: string) => {
+    setResetPasswordStatus((prev) => ({ ...prev, [userId]: "sending" }));
+
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userEmail }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Fehler beim Senden der E-Mail");
+      }
+
+      setResetPasswordStatus((prev) => ({ ...prev, [userId]: "sent" }));
+      setTimeout(() => {
+        setResetPasswordStatus((prev) => ({ ...prev, [userId]: "idle" }));
+      }, 3000);
+    } catch (err) {
+      console.error("Failed to send password reset:", err);
+      setResetPasswordStatus((prev) => ({ ...prev, [userId]: "error" }));
+      setTimeout(() => {
+        setResetPasswordStatus((prev) => ({ ...prev, [userId]: "idle" }));
+      }, 3000);
     }
   };
 
@@ -296,15 +328,60 @@ export default function UsersPage() {
                         {formatDate(user.lastLogin)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => setModal({ type: "delete", user })}
-                        disabled={busyId === user.id || user.id === currentUser?.id}
-                        className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={user.id === currentUser?.id ? "Kann dich selbst nicht löschen" : "Benutzer löschen"}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-end gap-2">
+                        {(() => {
+                          const status = resetPasswordStatus[user.id] || "idle";
+                          return (
+                            <button
+                              onClick={() => handleSendPasswordReset(user.id, user.email)}
+                              disabled={status === "sending" || status === "sent"}
+                              className={cn(
+                                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                                status === "sent"
+                                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                  : status === "error"
+                                  ? "bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30"
+                                  : status === "sending"
+                                  ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 cursor-wait"
+                                  : "bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20",
+                                "disabled:opacity-50 disabled:cursor-not-allowed"
+                              )}
+                              title="Passwort-Zurücksetzen-Link per E-Mail senden"
+                            >
+                              {status === "sending" ? (
+                                <>
+                                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                  <span>Senden...</span>
+                                </>
+                              ) : status === "sent" ? (
+                                <>
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  <span>Gesendet</span>
+                                </>
+                              ) : status === "error" ? (
+                                <>
+                                  <AlertCircle className="w-3 h-3" />
+                                  <span>Fehler</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Mail className="w-3 h-3" />
+                                  <span>Reset</span>
+                                </>
+                              )}
+                            </button>
+                          );
+                        })()}
+                        <button
+                          onClick={() => setModal({ type: "delete", user })}
+                          disabled={busyId === user.id || user.id === currentUser?.id}
+                          className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={user.id === currentUser?.id ? "Kann dich selbst nicht löschen" : "Benutzer löschen"}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

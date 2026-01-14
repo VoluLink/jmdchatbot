@@ -2,13 +2,9 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  Database,
   RefreshCw,
   Save,
-  Settings,
-  SlidersHorizontal,
   Eye,
-  Thermometer,
   CheckCircle2,
   Key,
   Shield,
@@ -46,7 +42,6 @@ export default function SettingsPage() {
   // 2FA states
   const [twoFaEnabled, setTwoFaEnabled] = useState(false);
   const [twoFaLoading, setTwoFaLoading] = useState(true);
-  const [phoneNumberMasked, setPhoneNumberMasked] = useState("");
   const [backupCodesRemaining, setBackupCodesRemaining] = useState(0);
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [showDisableConfirm, setShowDisableConfirm] = useState(false);
@@ -77,7 +72,6 @@ export default function SettingsPage() {
         if (res.ok) {
           const data = await res.json();
           setTwoFaEnabled(data.enabled);
-          setPhoneNumberMasked(data.phoneNumberMasked || "");
           setBackupCodesRemaining(data.backupCodesRemaining || 0);
         }
       } catch (err) {
@@ -138,8 +132,7 @@ export default function SettingsPage() {
     fetch("/api/auth/two-fa/status")
       .then((res) => res.json())
       .then((data) => {
-        setPhoneNumberMasked(data.phoneNumberMasked || "");
-        setBackupCodesRemaining(data.backupCodesRemaining || 0);
+          setBackupCodesRemaining(data.backupCodesRemaining || 0);
       });
   };
 
@@ -165,7 +158,6 @@ export default function SettingsPage() {
       }
 
       setTwoFaEnabled(false);
-      setPhoneNumberMasked("");
       setBackupCodesRemaining(0);
       setShowDisableConfirm(false);
       setDisablePassword("");
@@ -220,7 +212,7 @@ export default function SettingsPage() {
               <h1 className="text-4xl font-semibold text-white leading-tight">Einstellungen</h1>
             </div>
             <p className="text-sm text-slate-300">
-              Passe RAG-Parameter und Anzeigeoptionen an
+              Verwalte dein Konto und passe Anzeigeoptionen an
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -238,105 +230,6 @@ export default function SettingsPage() {
               <Save className="w-4 h-4" />
               {status === "saving" ? "Speichert..." : status === "saved" ? "✓ Gespeichert" : "Speichern"}
             </button>
-          </div>
-        </div>
-
-        {/* Retrieval Settings */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl shadow-xl shadow-black/30 p-6 backdrop-blur-lg space-y-6">
-          <SectionHeader
-            icon={<Database className="w-5 h-5 text-emerald-300" />}
-            title="Retrieval-Parameter"
-            description="Steuert, wie Dokumente abgerufen und verarbeitet werden"
-          />
-
-          {/* Top K */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-white">Top-K (Anzahl Chunks)</p>
-                <p className="text-xs text-slate-400">
-                  Wie viele relevante Dokumenten-Abschnitte pro Anfrage
-                </p>
-              </div>
-              <div className="flex items-center gap-3 bg-white/5 rounded-xl px-4 py-2 border border-white/10">
-                <input
-                  type="range"
-                  min={1}
-                  max={15}
-                  value={settings.topK}
-                  onChange={(e) => setSettings((s) => ({ ...s, topK: Number(e.target.value) }))}
-                  className="w-40 accent-emerald-400"
-                />
-                <div className="w-12 h-10 flex items-center justify-center text-lg font-bold text-white bg-emerald-500/20 rounded-lg border border-emerald-500/30">
-                  {settings.topK}
-                </div>
-              </div>
-            </div>
-            <p className="text-xs text-slate-500">
-              {settings.topK <= 3 && "⚡ Schnell, aber wenig Kontext"}
-              {settings.topK > 3 && settings.topK <= 7 && "✅ Empfohlen - Gutes Balance"}
-              {settings.topK > 7 && "🔍 Viel Kontext, aber langsamer"}
-            </p>
-          </div>
-
-          {/* Temperature */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-white">Temperatur</p>
-                <p className="text-xs text-slate-400">
-                  Kreativität vs. Präzision der Antworten
-                </p>
-              </div>
-              <div className="flex items-center gap-3 bg-white/5 rounded-xl px-4 py-2 border border-white/10">
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.1}
-                  value={settings.temperature}
-                  onChange={(e) => setSettings((s) => ({ ...s, temperature: Number(e.target.value) }))}
-                  className="w-40 accent-indigo-400"
-                />
-                <div className="w-12 h-10 flex items-center justify-center text-base font-bold text-white bg-indigo-500/20 rounded-lg border border-indigo-500/30">
-                  {settings.temperature.toFixed(1)}
-                </div>
-              </div>
-            </div>
-            <p className="text-xs text-slate-500">
-              {settings.temperature <= 0.3 && "🎯 Sehr präzise, konsistent"}
-              {settings.temperature > 0.3 && settings.temperature <= 0.7 && "✅ Empfohlen - Ausgewogen"}
-              {settings.temperature > 0.7 && "🎨 Kreativ, variabel"}
-            </p>
-          </div>
-
-          {/* Chunk Size */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-white">Chunk-Größe (Tokens)</p>
-                <p className="text-xs text-slate-400">
-                  Größe der Dokumenten-Abschnitte für Zitate
-                </p>
-              </div>
-              <div className="flex items-center gap-3 bg-white/5 rounded-xl px-4 py-2 border border-white/10">
-                <input
-                  type="range"
-                  min={256}
-                  max={1024}
-                  step={128}
-                  value={settings.chunkSize}
-                  onChange={(e) => setSettings((s) => ({ ...s, chunkSize: Number(e.target.value) }))}
-                  className="w-40 accent-amber-400"
-                />
-                <div className="w-14 h-10 flex items-center justify-center text-sm font-bold text-white bg-amber-500/20 rounded-lg border border-amber-500/30">
-                  {settings.chunkSize}
-                </div>
-              </div>
-            </div>
-            <p className="text-xs text-slate-500">
-              Empfohlen: 512 Tokens • Größer = mehr Kontext pro Zitat
-            </p>
           </div>
         </div>
 
@@ -471,13 +364,15 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* Phone Number Info */}
+              {/* Authenticator App Info */}
               <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
                 <div className="flex items-center gap-3">
                   <Smartphone className="w-5 h-5 text-slate-400" />
                   <div>
-                    <p className="text-sm font-medium text-white">Telefonnummer</p>
-                    <p className="text-xs text-slate-400">{phoneNumberMasked}</p>
+                    <p className="text-sm font-medium text-white">Authenticator-App</p>
+                    <p className="text-xs text-slate-400">
+                      Google/Microsoft Authenticator, Authy
+                    </p>
                   </div>
                 </div>
               </div>
@@ -526,7 +421,7 @@ export default function SettingsPage() {
               <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                 <p className="text-sm text-blue-200 mb-3">
                   <strong>Empfohlen:</strong> Aktiviere 2FA, um dein Konto besser zu schützen.
-                  Bei jedem Login wird zusätzlich zu deinem Passwort ein Code per SMS an dein Telefon gesendet.
+                  Bei jedem Login wird zusätzlich zu deinem Passwort ein Code aus deiner Authenticator-App benötigt.
                 </p>
                 <ul className="space-y-1.5 text-xs text-blue-300/80">
                   <li className="flex items-start gap-2">
@@ -535,7 +430,7 @@ export default function SettingsPage() {
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-blue-400 mt-0.5">✓</span>
-                    <span>SMS-Code wird an deine Telefonnummer gesendet</span>
+                    <span>Funktioniert mit Google Authenticator, Microsoft Authenticator, Authy</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-blue-400 mt-0.5">✓</span>
@@ -558,8 +453,7 @@ export default function SettingsPage() {
         {/* Info Box */}
         <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4">
           <p className="text-sm text-indigo-200">
-            💡 <strong>Tipp:</strong> Die Einstellungen werden sofort in der Chat-Oberfläche angewendet.
-            Du musst die Seite nicht neu laden.
+            💡 <strong>Tipp:</strong> Erweiterte RAG-Parameter (Top-K, Temperatur, Chunk-Größe) sind automatisch optimiert und benötigen keine Anpassung.
           </p>
         </div>
       </div>
