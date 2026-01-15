@@ -28,6 +28,7 @@ export default function RootLayout({
     <html lang="en" className="h-screen antialiased overflow-hidden">
       <body
         className={`${geistSans.variable} ${geistMono.variable} flex h-screen w-screen overflow-hidden bg-gray-50 text-gray-900 selection:bg-indigo-100 selection:text-indigo-900`}
+        suppressHydrationWarning
       >
         <AuthProvider>
           <ClientLayout>

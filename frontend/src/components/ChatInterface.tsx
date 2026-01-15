@@ -182,8 +182,8 @@ export function ChatInterface() {
         )}
 
       <div className={cn(
-          "flex-1 overflow-y-auto px-4 py-6 space-y-8 scroll-smooth no-scrollbar flex flex-col",
-          messages.length === 0 ? "justify-center" : "pt-20" 
+          "flex-1 overflow-y-auto px-4 py-6 space-y-8 scroll-smooth dark-scrollbar flex flex-col",
+          messages.length === 0 ? "justify-center" : "pt-20"
       )}>
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-6 animate-fade-in">
@@ -348,7 +348,7 @@ export function ChatInterface() {
               }}
               onKeyDown={handleKeyDown}
               placeholder="Frag mich etwas..."
-              className="flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 text-slate-100 placeholder:text-slate-400 py-3.5 px-4 text-[15px] resize-none max-h-[120px] overflow-y-auto scrollbar-none"
+              className="flex-1 bg-transparent border-0 focus:outline-none focus:ring-0 text-slate-100 placeholder:text-slate-400 py-3.5 px-4 text-[15px] resize-none max-h-[120px] overflow-y-auto dark-scrollbar"
               disabled={isLoading}
               rows={1}
               style={{ minHeight: '48px' }}

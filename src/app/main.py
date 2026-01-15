@@ -9,9 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from llama_index.core.query_engine import CitationQueryEngine
 from llama_index.core.prompts import PromptTemplate
+from llama_index.core.response_synthesizers import get_response_synthesizer
 
 from src.config.settings import get_settings
 from src.indexing import get_index_manager
+from src.retrieval import HybridRetriever, CrossEncoderReranker, QueryTransformer
 
 
 # System prompt for concise, well-structured responses
@@ -19,16 +21,19 @@ SYSTEM_PROMPT = """Du bist ein hilfreicher Assistent für deutsches Aufenthalts-
 
 KRITISCHE REGEL: Verwende Zitate [1], [2], [3] NUR wenn die Information aus dem bereitgestellten Kontext stammt.
 
+FORMATIERUNG:
+- Strukturiere Antworten mit Aufzählungspunkten (•) oder nummerierten Listen
+- Gruppiere zusammengehörige Informationen unter Zwischenüberschriften wenn sinnvoll
+- Sei VOLLSTÄNDIG - lass keine wichtigen Details, Voraussetzungen oder Ausnahmen aus
+- Alle relevanten Informationen aus dem Kontext sollen enthalten sein
+
 Regeln für deine Antworten:
 - Für RECHTLICHE FRAGEN: Antworte NUR basierend auf dem bereitgestellten Kontext
 - Für RECHTLICHE INHALTE: Verwende Inline-Zitate [1], [2] für jede Aussage aus den Dokumenten
 - Für ALLGEMEINE/META-FRAGEN (z.B. "Wer bist du?"): Darfst du kurz antworten, aber OHNE Zitate
 - Falls rechtliche Informationen NICHT im Kontext stehen: "Diese Information finde ich nicht in den vorliegenden Dokumenten."
-- Antworte präzise und kompakt (max. 3-4 kurze Absätze)
-- Strukturiere mit Aufzählungen wenn sinnvoll
 - Schreibe auf Deutsch
 - KEINE Quellenangaben am Ende auflisten (diese werden automatisch angezeigt)
-- Keine Überschriften wie "Antwort:" oder "Zusammenfassung:"
 
 NIEMALS Zitate verwenden wenn:
 - Die Frage nicht über Aufenthalts-/Asylrecht ist
@@ -69,11 +74,31 @@ class QueryResponse(BaseModel):
 settings = get_settings()
 index_manager = get_index_manager()
 
+# Preload reranker model on startup to avoid cold start delay
+_reranker_cache = None
+def get_reranker():
+    global _reranker_cache
+    if _reranker_cache is None and settings.use_reranker:
+        _reranker_cache = CrossEncoderReranker(
+            model_name=settings.reranker_model,
+            top_n=5,
+        )
+        # Warm up the model with a dummy call
+        _reranker_cache._load_model()
+    return _reranker_cache
+
 app = FastAPI(
     title="RAG Seminararbeit – LlamaIndex API",
     description="Einfacher Query-Service für eine modulare RAG-Pipeline.",
     version="0.1.0",
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """Preload models on startup to avoid cold start delay."""
+    print("Preloading models...")
+    get_reranker()  # Load reranker model
+    print("Models ready!")
 
 # Add CORS Middleware to allow requests from the frontend
 app.add_middleware(
@@ -118,12 +143,24 @@ async def favicon() -> None:
 
 
 @app.get("/health")
-async def health() -> Dict[str, str]:
+async def health() -> Dict[str, Any]:
     """
-    Healthcheck-Endpoint.
+    Healthcheck-Endpoint with retrieval info.
     """
-
-    return {"status": "ok"}
+    nodes_count = len(index_manager.get_all_nodes())
+    return {
+        "status": "ok",
+        "embedding_model": settings.embedding_model,
+        "chunk_size": settings.chunk_size,
+        "hybrid_search": settings.use_hybrid_search,
+        "hybrid_active": settings.use_hybrid_search and nodes_count > 0,
+        "bm25_weight": settings.bm25_weight if settings.use_hybrid_search else None,
+        "reranker": settings.use_reranker,
+        "reranker_model": settings.reranker_model if settings.use_reranker else None,
+        "query_transform": settings.use_query_transform,
+        "query_transform_strategy": settings.query_transform_strategy if settings.use_query_transform else None,
+        "cached_nodes": nodes_count,
+    }
 
 
 @app.post("/query", response_model=QueryResponse)
@@ -135,7 +172,7 @@ async def query(req: QueryRequest) -> QueryResponse:
     """
 
     index = index_manager.index
-    
+
     # Create LLM with custom temperature
     from llama_index.llms.openai import OpenAI
     llm = OpenAI(
@@ -143,15 +180,57 @@ async def query(req: QueryRequest) -> QueryResponse:
         model=settings.openai_model,
         temperature=req.temperature,
     )
-    
-    # Use CitationQueryEngine for inline citations [1], [2], etc.
-    query_engine = CitationQueryEngine.from_args(
-        index,
-        similarity_top_k=req.top_k,
-        llm=llm,
-        citation_chunk_size=req.chunk_size,
-        citation_qa_template=CITATION_QA_TEMPLATE,
-    )
+
+    # Get cached reranker (preloaded on startup)
+    reranker = get_reranker() if settings.use_reranker else None
+
+    # Initialize query transformer if enabled (HyDE generates better retrieval queries)
+    query_transformer = None
+    if settings.use_query_transform:
+        query_transformer = QueryTransformer(
+            llm=llm,
+            strategy=settings.query_transform_strategy,
+            language="german",
+        )
+
+    # Use hybrid retrieval if enabled and nodes are available
+    if settings.use_hybrid_search:
+        nodes = index_manager.get_all_nodes()
+        if nodes:
+            retriever = HybridRetriever(
+                vector_index=index,
+                nodes=nodes,
+                similarity_top_k=req.top_k,
+                bm25_weight=settings.bm25_weight,
+                reranker=reranker,
+                query_transformer=query_transformer,
+            )
+            # Build CitationQueryEngine with custom hybrid retriever
+            query_engine = CitationQueryEngine.from_args(
+                index,
+                retriever=retriever,
+                llm=llm,
+                citation_chunk_size=req.chunk_size,
+                citation_qa_template=CITATION_QA_TEMPLATE,
+            )
+        else:
+            # Fallback to vector-only if no nodes cached yet
+            query_engine = CitationQueryEngine.from_args(
+                index,
+                similarity_top_k=req.top_k,
+                llm=llm,
+                citation_chunk_size=req.chunk_size,
+                citation_qa_template=CITATION_QA_TEMPLATE,
+            )
+    else:
+        # Vector-only retrieval
+        query_engine = CitationQueryEngine.from_args(
+            index,
+            similarity_top_k=req.top_k,
+            llm=llm,
+            citation_chunk_size=req.chunk_size,
+            citation_qa_template=CITATION_QA_TEMPLATE,
+        )
 
     try:
         # LlamaIndex ist synchron, daher in Thread ausführen.
