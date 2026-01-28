@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { resolveUnderSources } from "../../document-management/_paths";
+import { verifyAdmin } from "../../document-management/_auth";
 
-// POST - Upload files
+// POST - Upload files (admin only)
 export async function POST(request: NextRequest) {
+  const auth = await verifyAdmin(request);
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: 403 });
+  }
+
   try {
     const formData = await request.formData();
     const files = formData.getAll("files") as File[];

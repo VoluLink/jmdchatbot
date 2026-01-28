@@ -2,8 +2,6 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  RefreshCw,
-  Save,
   Eye,
   CheckCircle2,
   Key,
@@ -33,7 +31,6 @@ const DEFAULT_SETTINGS: SettingsState = {
 export default function SettingsPage() {
   const { user } = useAuth();
   const [settings, setSettings] = useState<SettingsState>(DEFAULT_SETTINGS);
-  const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordStatus, setPasswordStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
@@ -83,22 +80,6 @@ export default function SettingsPage() {
 
     fetchTwoFaStatus();
   }, []);
-
-  const handleSave = () => {
-    setStatus("saving");
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    // Dispatch custom event so ChatInterface can listen for changes
-    window.dispatchEvent(new CustomEvent("rag-settings-changed", { detail: settings }));
-    setTimeout(() => setStatus("saved"), 200);
-    setTimeout(() => setStatus("idle"), 1400);
-  };
-
-  const handleReset = () => {
-    setSettings(DEFAULT_SETTINGS);
-    localStorage.removeItem(STORAGE_KEY);
-    window.dispatchEvent(new CustomEvent("rag-settings-changed", { detail: DEFAULT_SETTINGS }));
-    setStatus("idle");
-  };
 
   const handlePasswordChange = async () => {
     setPasswordError("");
@@ -203,40 +184,22 @@ export default function SettingsPage() {
   return (
     <div className="h-full w-full overflow-y-auto bg-[#212121] text-slate-100 grey-scrollbar">
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
-        <div className="flex items-start justify-between gap-6">
-          <div className="space-y-2">
-            <p className="text-base font-semibold uppercase tracking-[0.3em] text-slate-400">
-              Systemsteuerung
-            </p>
-            <div className="flex items-center gap-3">
-              <h1 className="text-4xl font-semibold text-white leading-tight">Einstellungen</h1>
-            </div>
-            <p className="text-sm text-slate-300">
-              Verwalte dein Konto und passe Anzeigeoptionen an
-            </p>
-          </div>
+        <div className="space-y-2">
+          <p className="text-base font-semibold uppercase tracking-[0.3em] text-slate-400">
+            Systemsteuerung
+          </p>
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleReset}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/15 bg-white/5 backdrop-blur-md text-sm font-medium text-slate-100 shadow-sm shadow-black/20 hover:bg-white/10 hover:border-white/25"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Zurücksetzen
-            </button>
-            <button
-              onClick={handleSave}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 border border-indigo-500/30 text-sm font-semibold text-white shadow-xl shadow-black/30 hover:bg-indigo-500"
-            >
-              <Save className="w-4 h-4" />
-              {status === "saving" ? "Speichert..." : status === "saved" ? "✓ Gespeichert" : "Speichern"}
-            </button>
+            <h1 className="text-4xl font-semibold text-white leading-tight">Einstellungen</h1>
           </div>
+          <p className="text-sm text-slate-300">
+            Verwalte dein Konto und passe Anzeigeoptionen an
+          </p>
         </div>
 
         {/* Display Settings */}
         <div className="bg-white/5 border border-white/10 rounded-2xl shadow-xl shadow-black/30 p-6 space-y-4 backdrop-blur-lg">
           <SectionHeader
-            icon={<Eye className="w-5 h-5 text-indigo-300" />}
+            icon={<Eye className="w-5 h-5 text-[#66B3FF]" />}
             title="Anzeige"
             description="Steuert, was in der Chat-Oberfläche angezeigt wird"
           />
@@ -244,7 +207,12 @@ export default function SettingsPage() {
           <Toggle
             label="Quellen unter Antworten anzeigen"
             checked={settings.showSources}
-            onChange={(checked) => setSettings((s) => ({ ...s, showSources: checked }))}
+            onChange={(checked) => {
+              const newSettings = { ...settings, showSources: checked };
+              setSettings(newSettings);
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(newSettings));
+              window.dispatchEvent(new CustomEvent("rag-settings-changed", { detail: newSettings }));
+            }}
             description="Zeigt zitierte Dokumente als klickbare Links"
           />
         </div>
@@ -263,7 +231,7 @@ export default function SettingsPage() {
               <div className={`h-12 w-12 rounded-full flex items-center justify-center text-sm font-bold ${
                 user?.role === "admin"
                   ? "bg-amber-500/20 text-amber-400 border-2 border-amber-500/30"
-                  : "bg-indigo-500/20 text-indigo-400 border-2 border-indigo-500/30"
+                  : "bg-[#00529E]/20 text-[#0077DD] border-2 border-[#0066C0]/30"
               }`}>
                 {user?.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?"}
               </div>
@@ -303,7 +271,7 @@ export default function SettingsPage() {
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="••••••••"
                   minLength={6}
-                  className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20"
                 />
               </div>
               <div>
@@ -314,14 +282,14 @@ export default function SettingsPage() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
                   minLength={6}
-                  className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20"
                 />
               </div>
             </div>
             <button
               onClick={handlePasswordChange}
               disabled={!newPassword || !confirmPassword || passwordStatus === "saving"}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00529E] text-white font-semibold hover:bg-[#0066C0] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {passwordStatus === "saving" ? (
                 <>
@@ -341,7 +309,7 @@ export default function SettingsPage() {
         {/* Two-Factor Authentication */}
         <div className="bg-white/5 border border-white/10 rounded-2xl shadow-xl shadow-black/30 p-6 space-y-6 backdrop-blur-lg">
           <SectionHeader
-            icon={<Shield className="w-5 h-5 text-indigo-300" />}
+            icon={<Shield className="w-5 h-5 text-[#66B3FF]" />}
             title="Zwei-Faktor-Authentifizierung (2FA)"
             description="Erhöhe die Sicherheit deines Kontos mit einem zusätzlichen Schutz"
           />
@@ -354,11 +322,11 @@ export default function SettingsPage() {
             /* 2FA Enabled - Show Management */
             <div className="space-y-4">
               {/* Status Badge */}
-              <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-lg flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-indigo-400 flex-shrink-0 mt-0.5" />
+              <div className="p-4 bg-[#00529E]/10 border border-[#0066C0]/20 rounded-lg flex items-start gap-3">
+                <CheckCircle2 className="w-5 h-5 text-[#0077DD] flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-indigo-200 mb-1">2FA ist aktiviert</p>
-                  <p className="text-xs text-indigo-300/80">
+                  <p className="text-sm font-semibold text-[#99CCFF] mb-1">2FA ist aktiviert</p>
+                  <p className="text-xs text-[#66B3FF]/80">
                     Dein Konto ist durch eine zusätzliche Sicherheitsebene geschützt.
                   </p>
                 </div>
@@ -390,7 +358,7 @@ export default function SettingsPage() {
                 </div>
                 <button
                   onClick={() => setShowRegenerateModal(true)}
-                  className="px-4 py-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-[#0077DD] hover:text-[#66B3FF] transition-colors"
                 >
                   Neu generieren
                 </button>
@@ -441,7 +409,7 @@ export default function SettingsPage() {
 
               <button
                 onClick={() => setShowSetupModal(true)}
-                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-colors"
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[#00529E] hover:bg-[#0066C0] text-white font-semibold rounded-lg transition-colors"
               >
                 <Shield className="w-5 h-5" />
                 2FA aktivieren
@@ -450,12 +418,6 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* Info Box */}
-        <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4">
-          <p className="text-sm text-indigo-200">
-            💡 <strong>Tipp:</strong> Erweiterte RAG-Parameter (Top-K, Temperatur, Chunk-Größe) sind automatisch optimiert und benötigen keine Anpassung.
-          </p>
-        </div>
       </div>
 
       {/* 2FA Setup Modal */}

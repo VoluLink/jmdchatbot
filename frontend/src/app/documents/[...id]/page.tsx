@@ -89,7 +89,7 @@ export default function DocumentViewPage() {
               <ArrowLeft className="h-5 w-5" />
             </button>
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+              <div className="h-10 w-10 rounded-lg bg-[#00529E]/20 text-[#0077DD] flex items-center justify-center border border-[#00529E]/30">
                 <FileText className="h-5 w-5" />
               </div>
               <div>
@@ -138,7 +138,7 @@ export default function DocumentViewPage() {
               <a
                 href={apiPath}
                 download={docInfo.name}
-                className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors font-medium"
+                className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-[#00529E] hover:bg-[#0066C0] text-white rounded-lg transition-colors font-medium"
               >
                 <Download className="h-4 w-4" />
                 PDF herunterladen

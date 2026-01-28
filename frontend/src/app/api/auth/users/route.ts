@@ -1,9 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import path from "path";
+import { jwtVerify } from "jose";
 
-// GET - List all users
-export async function GET() {
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET || "your-secret-key-change-in-production"
+);
+
+// Helper function to verify admin role
+async function verifyAdmin(request: NextRequest) {
+  const token = request.cookies.get("auth-token")?.value;
+
+  if (!token) {
+    return { authorized: false, error: "Not authenticated" };
+  }
+
+  try {
+    const verified = await jwtVerify(token, JWT_SECRET);
+    const payload = verified.payload;
+
+    if (payload.role !== "admin") {
+      return { authorized: false, error: "Admin access required" };
+    }
+
+    return { authorized: true, userId: payload.userId };
+  } catch (error) {
+    return { authorized: false, error: "Invalid token" };
+  }
+}
+
+// GET - List all users (admin only)
+export async function GET(request: NextRequest) {
+  const auth = await verifyAdmin(request);
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: 403 });
+  }
+
   try {
     return new Promise((resolve) => {
       const pythonProcess = spawn(
@@ -38,8 +70,13 @@ export async function GET() {
   }
 }
 
-// DELETE - Delete user
+// DELETE - Delete user (admin only)
 export async function DELETE(request: NextRequest) {
+  const auth = await verifyAdmin(request);
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: 403 });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("id");

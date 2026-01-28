@@ -3,8 +3,14 @@ import fs from "fs/promises";
 import path from "path";
 
 import { normalizeRelPath, resolveUnderSources } from "../_paths";
+import { verifyAdmin } from "../_auth";
 
 export async function POST(request: NextRequest) {
+  const auth = await verifyAdmin(request);
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: 403 });
+  }
+
   try {
     const body = (await request.json()) as {
       parentPath?: string;
@@ -33,6 +39,11 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  const auth = await verifyAdmin(request);
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: 403 });
+  }
+
   try {
     const body = (await request.json()) as {
       path: string;
@@ -67,6 +78,11 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const auth = await verifyAdmin(request);
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: 403 });
+  }
+
   try {
     const body = (await request.json()) as {
       path: string;

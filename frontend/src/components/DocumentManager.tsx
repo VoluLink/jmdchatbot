@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { encodePathSegments } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 type TreeNode = {
   name: string;
@@ -67,6 +68,8 @@ function flattenFolders(node: TreeNode): string[] {
 }
 
 export function DocumentManager() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set([""]));
   const [error, setError] = useState<string | null>(null);
@@ -263,16 +266,18 @@ export function DocumentManager() {
           <div>
             <h3 className="text-sm font-semibold text-white">Dokumentenstruktur</h3>
             <p className="text-xs text-slate-400 mt-1">
-              Rechtsklick für Optionen • Drag & Drop zum Verschieben
+              {isAdmin ? "Rechtsklick für Optionen • Drag & Drop zum Verschieben" : "Nur-Lesen Modus"}
             </p>
           </div>
-          <button
-            onClick={() => setModal({ type: "create", parentPath: "" })}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/30 hover:border-indigo-500/40 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Neuer Ordner
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setModal({ type: "create", parentPath: "" })}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/30 hover:border-indigo-500/40 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Neuer Ordner
+            </button>
+          )}
         </div>
 
         {error && (
@@ -294,6 +299,7 @@ export function DocumentManager() {
             open={open}
             busyPath={busyPath}
             dragOver={dragOver}
+            isAdmin={isAdmin}
             onToggle={toggleFolder}
             onContextMenu={handleContextMenu}
             onDragStart={handleDragStart}
@@ -312,7 +318,7 @@ export function DocumentManager() {
         </div>
       </div>
 
-      {contextMenu && (
+      {contextMenu && isAdmin && (
         <ContextMenu
           menu={contextMenu}
           onClose={() => setContextMenu(null)}
@@ -393,6 +399,7 @@ function TreeItem({
   open,
   busyPath,
   dragOver,
+  isAdmin,
   onToggle,
   onContextMenu,
   onDragStart,
@@ -405,6 +412,7 @@ function TreeItem({
   open: Set<string>;
   busyPath: string | null;
   dragOver: string | null;
+  isAdmin: boolean;
   onToggle: (path: string) => void;
   onContextMenu: (e: React.MouseEvent, node: TreeNode) => void;
   onDragStart: (e: React.DragEvent, node: TreeNode) => void;
@@ -426,12 +434,12 @@ function TreeItem({
           } ${isBusy ? "opacity-50" : ""}`}
           style={{ paddingLeft: 8 + indent }}
           onClick={() => onToggle(node.path)}
-          onContextMenu={(e) => onContextMenu(e, node)}
-          draggable={!!node.path}
-          onDragStart={(e) => onDragStart(e, node)}
-          onDragOver={(e) => onDragOver(e, node.path)}
-          onDragLeave={onDragLeave}
-          onDrop={(e) => onDrop(e, node.path)}
+          onContextMenu={isAdmin ? (e) => onContextMenu(e, node) : undefined}
+          draggable={isAdmin && !!node.path}
+          onDragStart={isAdmin ? (e) => onDragStart(e, node) : undefined}
+          onDragOver={isAdmin ? (e) => onDragOver(e, node.path) : undefined}
+          onDragLeave={isAdmin ? onDragLeave : undefined}
+          onDrop={isAdmin ? (e) => onDrop(e, node.path) : undefined}
         >
           <ChevronRight
             className={`w-3.5 h-3.5 text-slate-400 transition-transform ${
@@ -460,6 +468,7 @@ function TreeItem({
               open={open}
               busyPath={busyPath}
               dragOver={dragOver}
+              isAdmin={isAdmin}
               onToggle={onToggle}
               onContextMenu={onContextMenu}
               onDragStart={onDragStart}
@@ -479,9 +488,9 @@ function TreeItem({
         isBusy ? "opacity-50" : ""
       }`}
       style={{ paddingLeft: 28 + indent }}
-      draggable
-      onDragStart={(e) => onDragStart(e, node)}
-      onContextMenu={(e) => onContextMenu(e, node)}
+      draggable={isAdmin}
+      onDragStart={isAdmin ? (e) => onDragStart(e, node) : undefined}
+      onContextMenu={isAdmin ? (e) => onContextMenu(e, node) : undefined}
     >
       <FileText className="w-4 h-4 text-slate-400" />
       <Link

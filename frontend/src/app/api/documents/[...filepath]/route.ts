@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 
 import { resolveUnderSources } from "../../document-management/_paths";
+import { verifyAdmin } from "../../document-management/_auth";
 
 export async function GET(
   request: NextRequest,
@@ -55,6 +56,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ filepath: string[] }> }
 ) {
+  const auth = await verifyAdmin(request);
+  if (!auth.authorized) {
+    return new NextResponse(auth.error, { status: 403 });
+  }
+
   try {
     const { filepath } = await params;
 

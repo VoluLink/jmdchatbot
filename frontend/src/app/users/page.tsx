@@ -143,18 +143,7 @@ export default function UsersPage() {
     });
   };
 
-  // Only admins can manage users
-  if (currentUser?.role !== "admin") {
-    return (
-      <div className="h-full flex items-center justify-center bg-[#212121] text-slate-100">
-        <div className="text-center space-y-4">
-          <Shield className="w-16 h-16 text-slate-500 mx-auto" />
-          <h2 className="text-xl font-semibold">Keine Berechtigung</h2>
-          <p className="text-slate-400">Nur Administratoren können Benutzer verwalten.</p>
-        </div>
-      </div>
-    );
-  }
+  const isAdmin = currentUser?.role === "admin";
 
   if (loading) {
     return (
@@ -183,13 +172,15 @@ export default function UsersPage() {
                 Verwalte Benutzerkonten und Berechtigungen
               </p>
             </div>
-            <button
-              onClick={() => setModal({ type: "add" })}
-              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors font-medium"
-            >
-              <UserPlus className="h-4 w-4" />
-              Benutzer hinzufügen
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setModal({ type: "add" })}
+                className="flex items-center gap-2 px-4 py-2.5 bg-[#00529E] hover:bg-[#0066C0] text-white rounded-lg transition-colors font-medium"
+              >
+                <UserPlus className="h-4 w-4" />
+                Benutzer hinzufügen
+              </button>
+            )}
           </div>
 
           {/* Error Banner */}
@@ -206,8 +197,8 @@ export default function UsersPage() {
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-white/5 border border-white/10 rounded-xl p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-500/20 rounded-lg">
-                  <Users className="h-5 w-5 text-indigo-400" />
+                <div className="p-2 bg-[#0066C0]/20 rounded-lg">
+                  <Users className="h-5 w-5 text-[#0077DD]" />
                 </div>
                 <div>
                   <p className="text-2xl font-semibold text-white">{users.length}</p>
@@ -228,8 +219,8 @@ export default function UsersPage() {
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-500/20 rounded-lg">
-                  <UserIcon className="h-5 w-5 text-emerald-400" />
+                <div className="p-2 bg-[#00529E]/20 rounded-lg">
+                  <UserIcon className="h-5 w-5 text-[#0077DD]" />
                 </div>
                 <div>
                   <p className="text-2xl font-semibold text-white">{userCount}</p>
@@ -247,7 +238,7 @@ export default function UsersPage() {
               placeholder="Benutzer suchen..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50"
+              className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#0066C0]/50 focus:border-[#0066C0]/50"
             />
           </div>
 
@@ -283,9 +274,9 @@ export default function UsersPage() {
                       <div className="flex items-center gap-3">
                         <div className={cn(
                           "h-10 w-10 rounded-full flex items-center justify-center text-sm font-medium",
-                          user.role === "admin" 
+                          user.role === "admin"
                             ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                            : "bg-slate-500/20 text-slate-300 border border-slate-500/30"
+                            : "bg-[#00529E]/20 text-[#66B3FF] border border-[#00529E]/30"
                         )}>
                           {user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
                         </div>
@@ -303,7 +294,7 @@ export default function UsersPage() {
                         "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium",
                         user.role === "admin"
                           ? "bg-amber-500/20 text-amber-400"
-                          : "bg-slate-500/20 text-slate-300"
+                          : "bg-[#00529E]/20 text-[#66B3FF]"
                       )}>
                         {user.role === "admin" ? (
                           <>
@@ -329,59 +320,65 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        {(() => {
-                          const status = resetPasswordStatus[user.id] || "idle";
-                          return (
-                            <button
-                              onClick={() => handleSendPasswordReset(user.id, user.email)}
-                              disabled={status === "sending" || status === "sent"}
-                              className={cn(
-                                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                                status === "sent"
-                                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                  : status === "error"
-                                  ? "bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30"
-                                  : status === "sending"
-                                  ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 cursor-wait"
-                                  : "bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20",
-                                "disabled:opacity-50 disabled:cursor-not-allowed"
-                              )}
-                              title="Passwort-Zurücksetzen-Link per E-Mail senden"
-                            >
-                              {status === "sending" ? (
-                                <>
-                                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                  <span>Senden...</span>
-                                </>
-                              ) : status === "sent" ? (
-                                <>
-                                  <CheckCircle2 className="w-3 h-3" />
-                                  <span>Gesendet</span>
-                                </>
-                              ) : status === "error" ? (
-                                <>
-                                  <AlertCircle className="w-3 h-3" />
-                                  <span>Fehler</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Mail className="w-3 h-3" />
-                                  <span>Reset</span>
-                                </>
-                              )}
-                            </button>
-                          );
-                        })()}
-                        <button
-                          onClick={() => setModal({ type: "delete", user })}
-                          disabled={busyId === user.id || user.id === currentUser?.id}
-                          className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          title={user.id === currentUser?.id ? "Kann dich selbst nicht löschen" : "Benutzer löschen"}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
+                      {isAdmin ? (
+                        <div className="flex items-center justify-end gap-2">
+                          {(() => {
+                            const status = resetPasswordStatus[user.id] || "idle";
+                            return (
+                              <button
+                                onClick={() => handleSendPasswordReset(user.id, user.email)}
+                                disabled={status === "sending" || status === "sent"}
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                                  status === "sent"
+                                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                    : status === "error"
+                                    ? "bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30"
+                                    : status === "sending"
+                                    ? "bg-[#0066C0]/20 text-[#66B3FF] border border-[#0066C0]/30 cursor-wait"
+                                    : "bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20",
+                                  "disabled:opacity-50 disabled:cursor-not-allowed"
+                                )}
+                                title="Passwort-Zurücksetzen-Link per E-Mail senden"
+                              >
+                                {status === "sending" ? (
+                                  <>
+                                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span>Senden...</span>
+                                  </>
+                                ) : status === "sent" ? (
+                                  <>
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    <span>Gesendet</span>
+                                  </>
+                                ) : status === "error" ? (
+                                  <>
+                                    <AlertCircle className="w-3 h-3" />
+                                    <span>Fehler</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Mail className="w-3 h-3" />
+                                    <span>Reset</span>
+                                  </>
+                                )}
+                              </button>
+                            );
+                          })()}
+                          <button
+                            onClick={() => setModal({ type: "delete", user })}
+                            disabled={busyId === user.id || user.id === currentUser?.id}
+                            className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={user.id === currentUser?.id ? "Kann dich selbst nicht löschen" : "Benutzer löschen"}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-end">
+                          <span className="text-xs text-slate-500">–</span>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -468,7 +465,7 @@ function AddUserModal({
               placeholder="Max Mustermann"
               autoFocus
               required
-              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20 transition-all"
             />
           </div>
 
@@ -480,7 +477,7 @@ function AddUserModal({
               onChange={(e) => setEmail(e.target.value)}
               placeholder="max@example.com"
               required
-              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20 transition-all"
             />
           </div>
 
@@ -493,7 +490,7 @@ function AddUserModal({
               placeholder="••••••••"
               required
               minLength={6}
-              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20 transition-all"
             />
             <p className="text-xs text-slate-500 mt-1">Mindestens 6 Zeichen</p>
           </div>
@@ -503,7 +500,7 @@ function AddUserModal({
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as "admin" | "user")}
-              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20 transition-all"
             >
               <option value="user">Benutzer</option>
               <option value="admin">Administrator</option>
@@ -522,7 +519,7 @@ function AddUserModal({
             <button
               type="submit"
               disabled={!name.trim() || !email.trim() || !password.trim() || busy}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+              className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#00529E] text-white hover:bg-[#0066C0] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
             >
               {busy ? (
                 <>

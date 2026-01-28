@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import {
   RefreshCw,
@@ -7,8 +9,13 @@ import {
 import { DocumentManager } from "@/components/DocumentManager";
 import { FileUploader } from "@/components/FileUploader";
 import { UrlSourcesManager } from "@/components/UrlSourcesManager";
+import { DocumentRequestForm } from "@/components/DocumentRequestForm";
+import { DocumentRequestsManager } from "@/components/DocumentRequestsManager";
+import { useAuth } from "@/contexts/AuthContext";
 
-export default async function DocumentsPage() {
+export default function DocumentsPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   return (
     <div className="h-full w-full overflow-y-auto bg-[#212121] text-slate-100 grey-scrollbar">
       <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
@@ -32,17 +39,35 @@ export default async function DocumentsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6">
-          <FileUploader />
-        </div>
+        {isAdmin ? (
+          <>
+            <div className="grid grid-cols-1 gap-6">
+              <DocumentRequestsManager />
+            </div>
 
-        <div className="grid grid-cols-1 gap-6">
-          <DocumentManager />
-        </div>
+            <div className="grid grid-cols-1 gap-6">
+              <FileUploader />
+            </div>
 
-        <div className="grid grid-cols-1 gap-6">
-          <UrlSourcesManager />
-        </div>
+            <div className="grid grid-cols-1 gap-6">
+              <DocumentManager />
+            </div>
+
+            <div className="grid grid-cols-1 gap-6">
+              <UrlSourcesManager />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-6">
+              <DocumentRequestForm />
+            </div>
+
+            <div className="grid grid-cols-1 gap-6">
+              <DocumentManager />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
