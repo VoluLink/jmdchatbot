@@ -101,7 +101,7 @@ export default function ResetPasswordPage() {
         <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl shadow-2xl p-8">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl mb-4 shadow-lg">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-[#0077DD] rounded-2xl mb-4 shadow-lg">
               <Key className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-white mb-2">Passwort zurücksetzen</h1>
@@ -142,8 +142,8 @@ export default function ResetPasswordPage() {
           {/* Success State */}
           {status === "success" && (
             <div className="space-y-4 text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-500/20 border-2 border-emerald-500/30 rounded-full mb-2">
-                <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-[#0077DD]/20 border-2 border-[#0077DD]/30 rounded-full mb-2">
+                <CheckCircle2 className="w-8 h-8 text-[#0077DD]" />
               </div>
               <div>
                 <p className="text-lg font-semibold text-white mb-2">Passwort erfolgreich geändert!</p>
@@ -173,7 +173,7 @@ export default function ResetPasswordPage() {
                   placeholder="Mindestens 6 Zeichen"
                   minLength={6}
                   required
-                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0077DD] focus:ring-2 focus:ring-[#0077DD]/20 transition-colors"
                 />
               </div>
 
@@ -189,7 +189,7 @@ export default function ResetPasswordPage() {
                   placeholder="Passwort erneut eingeben"
                   minLength={6}
                   required
-                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0077DD] focus:ring-2 focus:ring-[#0077DD]/20 transition-colors"
                 />
               </div>
 
@@ -197,7 +197,7 @@ export default function ResetPasswordPage() {
               <button
                 type="submit"
                 disabled={status === "resetting"}
-                className="w-full px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 py-3 bg-[#0077DD] hover:bg-[#0066C0] text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {status === "resetting" ? (
                   <span className="flex items-center justify-center gap-2">

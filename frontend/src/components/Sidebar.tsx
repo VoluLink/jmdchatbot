@@ -206,7 +206,7 @@ export function Sidebar({
           <div className={cn(
             "h-8 w-8 rounded-full flex items-center justify-center text-xs font-semibold",
             user?.role === "admin"
-              ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+              ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
               : "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
           )}>
             {user?.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?"}

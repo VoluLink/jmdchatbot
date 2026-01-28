@@ -130,7 +130,7 @@ export default function LoginPage() {
                   placeholder="deine@email.de"
                   required
                   autoFocus
-                  className="w-full pl-11 pr-4 py-3 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  className="w-full pl-11 pr-4 py-3 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0077DD]/50 focus:ring-2 focus:ring-[#0077DD]/20 transition-all"
                 />
               </div>
             </div>
@@ -147,15 +147,23 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full pl-11 pr-4 py-3 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  className="w-full pl-11 pr-4 py-3 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0077DD]/50 focus:ring-2 focus:ring-[#0077DD]/20 transition-all"
                 />
+              </div>
+              <div className="text-right">
+                <Link
+                  href="/forgot-password"
+                  className="text-sm text-[#0077DD] hover:text-[#66B3FF] font-medium transition-colors"
+                >
+                  Passwort vergessen?
+                </Link>
               </div>
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[#0077DD] hover:bg-[#0066C0] text-white font-semibold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>
@@ -174,8 +182,8 @@ export default function LoginPage() {
             /* 2FA Verification UI */
             <div className="space-y-6">
               <div className="text-center">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-indigo-600/20 rounded-full mb-4">
-                  <Smartphone className="w-8 h-8 text-indigo-400" />
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-[#0077DD]/20 rounded-full mb-4">
+                  <Smartphone className="w-8 h-8 text-[#0077DD]" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-2">Zwei-Faktor-Authentifizierung</h3>
                 <p className="text-slate-300 text-sm">
@@ -205,7 +213,7 @@ export default function LoginPage() {
                 Keinen Code erhalten?{" "}
                 <Link
                   href="/login/backup-code"
-                  className="text-indigo-400 hover:text-indigo-300 font-medium"
+                  className="text-[#0077DD] hover:text-[#66B3FF] font-medium"
                 >
                   Backup-Code verwenden
                 </Link>
@@ -220,7 +228,7 @@ export default function LoginPage() {
                 Noch kein Konto?{" "}
                 <Link
                   href="/register"
-                  className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
+                  className="text-[#0077DD] hover:text-[#66B3FF] font-medium transition-colors"
                 >
                   Jetzt registrieren
                 </Link>

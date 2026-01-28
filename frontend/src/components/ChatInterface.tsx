@@ -249,8 +249,8 @@ export function ChatInterface() {
                     className="whitespace-pre-wrap"
                     dangerouslySetInnerHTML={{
                       __html: message.content.replace(
-                        /\[(\d+)\]/g, 
-                        '<span class="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold bg-indigo-500 text-white rounded-full mx-0.5 align-middle cursor-default" title="Quelle $1">$1</span>'
+                        /\[(\d+)\]/g,
+                        '<span class="inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold bg-[#0077DD] text-white rounded-full mx-0.5 align-middle cursor-default" title="Quelle $1">$1</span>'
                       )
                     }}
                   />
@@ -283,12 +283,12 @@ export function ChatInterface() {
                       <Link
                         key={filename}
                         href={`/documents/${encodePathSegments(filename)}`}
-                        className="inline-flex items-center gap-1.5 px-2 py-1 bg-white/40 border border-white/20 rounded-full shadow-sm text-[11px] text-gray-600 hover:bg-indigo-100 hover:border-indigo-300 hover:text-indigo-700 transition-colors cursor-pointer backdrop-blur-sm group"
+                        className="inline-flex items-center gap-1.5 px-2 py-1 bg-white/40 border border-white/20 rounded-full shadow-sm text-[11px] text-gray-600 hover:bg-[#0077DD]/20 hover:border-[#0077DD]/50 hover:text-[#0077DD] transition-colors cursor-pointer backdrop-blur-sm group"
                         title={`${filename} - Klicken zum Öffnen`}
                       >
                         <span className="flex-shrink-0 flex items-center gap-0.5">
                           {ids.map((id: number) => (
-                            <span key={id} className="w-4 h-4 flex items-center justify-center bg-indigo-500 text-white text-[9px] font-bold rounded-full group-hover:bg-indigo-600">
+                            <span key={id} className="w-4 h-4 flex items-center justify-center bg-[#0077DD] text-white text-[9px] font-bold rounded-full group-hover:bg-[#0066C0]">
                               {id}
                             </span>
                           ))}
@@ -297,7 +297,7 @@ export function ChatInterface() {
                           {filename.replace('.pdf', '')}
                         </span>
                         {source.score && (
-                          <span className="text-gray-400 text-[10px] group-hover:text-indigo-500">
+                          <span className="text-gray-400 text-[10px] group-hover:text-[#0077DD]">
                             {Math.round(source.score * 100)}%
                           </span>
                         )}

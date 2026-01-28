@@ -208,8 +208,8 @@ export default function UsersPage() {
             </div>
             <div className="bg-white/5 border border-white/10 rounded-xl p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-500/20 rounded-lg">
-                  <Crown className="h-5 w-5 text-amber-400" />
+                <div className="p-2 bg-purple-500/20 rounded-lg">
+                  <Crown className="h-5 w-5 text-purple-400" />
                 </div>
                 <div>
                   <p className="text-2xl font-semibold text-white">{adminCount}</p>
@@ -275,7 +275,7 @@ export default function UsersPage() {
                         <div className={cn(
                           "h-10 w-10 rounded-full flex items-center justify-center text-sm font-medium",
                           user.role === "admin"
-                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                            ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
                             : "bg-[#00529E]/20 text-[#66B3FF] border border-[#00529E]/30"
                         )}>
                           {user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
@@ -293,7 +293,7 @@ export default function UsersPage() {
                       <span className={cn(
                         "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium",
                         user.role === "admin"
-                          ? "bg-amber-500/20 text-amber-400"
+                          ? "bg-purple-500/20 text-purple-400"
                           : "bg-[#00529E]/20 text-[#66B3FF]"
                       )}>
                         {user.role === "admin" ? (
@@ -562,7 +562,7 @@ function DeleteUserModal({
         <p className="text-sm text-slate-300 mb-6">
           Möchten Sie <span className="font-semibold text-white">{user.name}</span> ({user.email}) wirklich löschen?
           {user.role === "admin" && (
-            <span className="block mt-2 text-amber-300">
+            <span className="block mt-2 text-purple-300">
               ⚠️ Dies ist ein Administrator-Account
             </span>
           )}

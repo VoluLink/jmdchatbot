@@ -105,22 +105,22 @@ export function DocumentRequestsManager() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "approved":
-        return <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
+        return <CheckCircle2 className="w-4 h-4 text-[#0077DD]" />;
       case "rejected":
-        return <XCircle className="w-4 h-4 text-red-400" />;
+        return <XCircle className="w-4 h-4 text-slate-400" />;
       default:
-        return <Clock className="w-4 h-4 text-amber-400" />;
+        return <Clock className="w-4 h-4 text-[#66B3FF]" />;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "approved":
-        return "bg-emerald-500/20 text-emerald-300 border-emerald-500/30";
+        return "bg-[#0077DD]/20 text-[#0077DD] border-[#0077DD]/30";
       case "rejected":
-        return "bg-red-500/20 text-red-300 border-red-500/30";
+        return "bg-slate-500/20 text-slate-300 border-slate-500/30";
       default:
-        return "bg-amber-500/20 text-amber-300 border-amber-500/30";
+        return "bg-[#66B3FF]/20 text-[#66B3FF] border-[#66B3FF]/30";
     }
   };
 
@@ -156,13 +156,16 @@ export function DocumentRequestsManager() {
 
         {/* Stats */}
         <div className="flex items-center gap-2 text-xs">
-          <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-[#66B3FF]/20 text-[#66B3FF] border border-[#66B3FF]/30">
+            <Clock className="w-3 h-3" />
             {pendingCount} Ausstehend
           </span>
-          <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-[#0077DD]/20 text-[#0077DD] border border-[#0077DD]/30">
+            <CheckCircle2 className="w-3 h-3" />
             {approvedCount} Genehmigt
           </span>
-          <span className="px-2 py-1 rounded bg-red-500/20 text-red-300 border border-red-500/30">
+          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-500/20 text-slate-300 border border-slate-500/30">
+            <XCircle className="w-3 h-3" />
             {rejectedCount} Abgelehnt
           </span>
         </div>

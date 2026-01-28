@@ -230,7 +230,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3 mb-3">
               <div className={`h-12 w-12 rounded-full flex items-center justify-center text-sm font-bold ${
                 user?.role === "admin"
-                  ? "bg-amber-500/20 text-amber-400 border-2 border-amber-500/30"
+                  ? "bg-purple-500/20 text-purple-400 border-2 border-purple-500/30"
                   : "bg-[#00529E]/20 text-[#0077DD] border-2 border-[#0066C0]/30"
               }`}>
                 {user?.name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?"}

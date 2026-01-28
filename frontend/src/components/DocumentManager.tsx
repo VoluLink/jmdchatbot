@@ -272,7 +272,7 @@ export function DocumentManager() {
           {isAdmin && (
             <button
               onClick={() => setModal({ type: "create", parentPath: "" })}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/30 hover:border-indigo-500/40 transition-all"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0077DD]/20 border border-[#0077DD]/30 text-xs font-semibold text-[#0077DD] hover:bg-[#0077DD]/30 hover:border-[#0077DD]/40 transition-all"
             >
               <Plus className="w-4 h-4" />
               Neuer Ordner
@@ -430,7 +430,7 @@ function TreeItem({
       <div>
         <div
           className={`group flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-all cursor-pointer ${
-            isDragOver ? "bg-indigo-500/20 ring-2 ring-indigo-500/50" : ""
+            isDragOver ? "bg-[#0077DD]/20 ring-2 ring-[#0077DD]/50" : ""
           } ${isBusy ? "opacity-50" : ""}`}
           style={{ paddingLeft: 8 + indent }}
           onClick={() => onToggle(node.path)}
@@ -447,9 +447,9 @@ function TreeItem({
             }`}
           />
           {isOpen ? (
-            <FolderOpen className="w-4 h-4 text-amber-400" />
+            <FolderOpen className="w-4 h-4 text-[#0077DD]" />
           ) : (
-            <Folder className="w-4 h-4 text-amber-400" />
+            <Folder className="w-4 h-4 text-[#0077DD]" />
           )}
           <span className="text-sm font-medium text-slate-100 flex-1">
             {node.path ? node.name : "data/sources"}
@@ -495,7 +495,7 @@ function TreeItem({
       <FileText className="w-4 h-4 text-slate-400" />
       <Link
         href={href}
-        className="flex-1 text-sm text-slate-200 hover:text-indigo-300 transition-colors truncate"
+        className="flex-1 text-sm text-slate-200 hover:text-[#0077DD] transition-colors truncate"
       >
         {node.name}
       </Link>
@@ -603,7 +603,7 @@ function CreateFolderModal({
               onChange={(e) => setName(e.target.value)}
               placeholder="z.B. Beratung"
               autoFocus
-              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0077DD]/50 focus:ring-2 focus:ring-[#0077DD]/20 transition-all"
             />
           </div>
           <div className="flex gap-3 justify-end">
@@ -617,7 +617,7 @@ function CreateFolderModal({
             <button
               type="submit"
               disabled={!name.trim()}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#0077DD] text-white hover:bg-[#0066C0] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               Erstellen
             </button>
@@ -659,7 +659,7 @@ function RenameFolderModal({
               onChange={(e) => setName(e.target.value)}
               autoFocus
               onFocus={(e) => e.target.select()}
-              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0077DD]/50 focus:ring-2 focus:ring-[#0077DD]/20 transition-all"
             />
           </div>
           <div className="flex gap-3 justify-end">
@@ -673,7 +673,7 @@ function RenameFolderModal({
             <button
               type="submit"
               disabled={!name.trim() || name === currentName}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#0077DD] text-white hover:bg-[#0066C0] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               Umbenennen
             </button>
@@ -765,7 +765,7 @@ function MoveModal({
             <select
               value={selectedFolder}
               onChange={(e) => setSelectedFolder(e.target.value)}
-              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white focus:outline-none focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white focus:outline-none focus:border-[#0077DD]/50 focus:ring-2 focus:ring-[#0077DD]/20 transition-all"
               autoFocus
             >
               <option value="">Root (data/sources)</option>
@@ -786,7 +786,7 @@ function MoveModal({
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-500 transition-all"
+              className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#0077DD] text-white hover:bg-[#0066C0] transition-all"
             >
               Verschieben
             </button>
@@ -854,11 +854,11 @@ function IndexFilesButton({ compact = false }: { compact?: boolean }) {
         <button
           onClick={handleIndex}
           disabled={indexing}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/30 disabled:opacity-50 transition-all"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0077DD]/20 border border-[#0077DD]/30 text-xs font-semibold text-[#0077DD] hover:bg-[#0077DD]/30 disabled:opacity-50 transition-all"
           title="Dateien indexieren"
         >
           {indexing ? (
-            <div className="w-3 h-3 border-2 border-indigo-300/30 border-t-indigo-300 rounded-full animate-spin" />
+            <div className="w-3 h-3 border-2 border-[#0077DD]/30 border-t-[#0077DD] rounded-full animate-spin" />
           ) : (
             <RefreshCw className="w-3 h-3" />
           )}
@@ -869,8 +869,8 @@ function IndexFilesButton({ compact = false }: { compact?: boolean }) {
           <div
             className={`absolute top-full right-0 mt-2 px-2 py-1 rounded text-[10px] whitespace-nowrap shadow-xl z-10 ${
               result.success
-                ? "bg-emerald-500/90 text-white"
-                : "bg-red-500/90 text-white"
+                ? "bg-[#0077DD]/90 text-white"
+                : "bg-slate-500/90 text-white"
             }`}
           >
             {result.message}

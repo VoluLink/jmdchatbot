@@ -180,7 +180,7 @@ export function UrlSourcesManager() {
           </div>
           <button
             onClick={() => setModal({ type: "add" })}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30 hover:border-emerald-500/40 transition-all"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0077DD]/20 border border-[#0077DD]/30 text-xs font-semibold text-[#0077DD] hover:bg-[#0077DD]/30 hover:border-[#0077DD]/40 transition-all"
           >
             <Plus className="w-4 h-4" />
             URL hinzufügen
@@ -217,7 +217,7 @@ export function UrlSourcesManager() {
                   <div
                     className={`mt-0.5 h-9 w-9 rounded-lg flex items-center justify-center ${
                       source.enabled
-                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                        ? "bg-[#0077DD]/20 text-[#0077DD] border border-[#0077DD]/30"
                         : "bg-slate-500/20 text-slate-400 border border-slate-500/30"
                     }`}
                   >
@@ -235,7 +235,7 @@ export function UrlSourcesManager() {
                         </span>
                       )}
                       {source.pendingUpdate && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-[#66B3FF]/20 text-[#66B3FF] border border-[#66B3FF]/30 animate-pulse">
                           ⚠️ Änderungen erkannt
                         </span>
                       )}
@@ -251,12 +251,12 @@ export function UrlSourcesManager() {
                         <div className="flex items-center gap-1">
                           {source.lastError ? (
                             <>
-                              <AlertCircle className="w-3 h-3 text-red-400" />
-                              <span className="text-red-300">Fehler</span>
+                              <AlertCircle className="w-3 h-3 text-slate-400" />
+                              <span className="text-slate-300">Fehler</span>
                             </>
                           ) : (
                             <>
-                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                              <CheckCircle2 className="w-3 h-3 text-[#0077DD]" />
                               <span>
                                 {new Date(source.lastFetched).toLocaleString("de-DE", {
                                   dateStyle: "short",
@@ -270,7 +270,7 @@ export function UrlSourcesManager() {
                     </div>
 
                     {source.lastError && (
-                      <p className="text-xs text-red-300 mt-2 line-clamp-1">
+                      <p className="text-xs text-slate-300 mt-2 line-clamp-1">
                         ⚠️ {source.lastError}
                       </p>
                     )}
@@ -281,7 +281,7 @@ export function UrlSourcesManager() {
                       <button
                         onClick={() => handleApplyUpdate(source.id)}
                         disabled={busyId === source.id}
-                        className="px-3 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 disabled:opacity-50 transition-all text-xs font-semibold"
+                        className="px-3 py-1.5 rounded-lg border border-[#66B3FF]/30 bg-[#66B3FF]/10 text-[#66B3FF] hover:bg-[#66B3FF]/20 disabled:opacity-50 transition-all text-xs font-semibold"
                         title="Index aktualisieren"
                       >
                         <RefreshCw className="w-3 h-3 inline mr-1" />
@@ -294,7 +294,7 @@ export function UrlSourcesManager() {
                       disabled={busyId === source.id}
                       className={`p-2 rounded-lg border transition-all ${
                         source.enabled
-                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+                          ? "border-[#0077DD]/30 bg-[#0077DD]/10 text-[#0077DD] hover:bg-[#0077DD]/20"
                           : "border-slate-500/30 bg-slate-500/10 text-slate-400 hover:bg-slate-500/20"
                       } disabled:opacity-50`}
                       title={source.enabled ? "Deaktivieren" : "Aktivieren"}
@@ -409,7 +409,7 @@ function UrlSourceModal({
               onChange={(e) => setName(e.target.value)}
               placeholder="z.B. Gesetze Portal"
               autoFocus
-              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0077DD]/50 focus:ring-2 focus:ring-[#0077DD]/20 transition-all"
             />
           </div>
 
@@ -420,7 +420,7 @@ function UrlSourceModal({
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com/dokumente"
-              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0077DD]/50 focus:ring-2 focus:ring-[#0077DD]/20 transition-all"
             />
           </div>
 
@@ -434,7 +434,7 @@ function UrlSourceModal({
               step="1"
               value={fetchIntervalDays}
               onChange={(e) => setFetchIntervalDays(parseInt(e.target.value) || 1)}
-              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white focus:outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white focus:outline-none focus:border-[#0077DD]/50 focus:ring-2 focus:ring-[#0077DD]/20 transition-all"
             />
             <p className="text-xs text-slate-400 mt-1">
               Minimum: 1 Tag • Standard: 1 Tag (täglich)
@@ -452,7 +452,7 @@ function UrlSourceModal({
             <button
               type="submit"
               disabled={!url.trim() || !name.trim()}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#0077DD] text-white hover:bg-[#0066C0] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {initialUrl ? "Speichern" : "Hinzufügen"}
             </button>
@@ -562,8 +562,8 @@ function CheckUrlsButton() {
         <div
           className={`absolute bottom-full right-0 mb-2 px-2 py-1 rounded text-[10px] whitespace-nowrap shadow-xl z-10 ${
             result.success
-              ? "bg-emerald-500/90 text-white"
-              : "bg-red-500/90 text-white"
+              ? "bg-[#0077DD]/90 text-white"
+              : "bg-slate-500/90 text-white"
           }`}
         >
           {result.message}

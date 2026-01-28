@@ -237,3 +237,17 @@ Die FastAPI-Endpoints sind direkt nutzbar:
   - Neue Seiten in `frontend/src/app` hinzufügen
 
 Die Struktur ist bewusst modular gehalten, damit Komponenten unabhängig erweitert oder ersetzt werden können.
+
+---
+
+## 📚 Dokumentation
+
+Detaillierte Setup- und Konfigurationsanleitungen findest du im [`docs/`](./docs/) Ordner:
+
+- **[Setup-Anleitung](./docs/SETUP.md)** - Detaillierte Einrichtungsschritte
+- **[Schnellreferenz](./docs/QUICK_REFERENCE.md)** - Häufig verwendete Befehle
+- **[Authentifizierung](./docs/AUTHENTICATION_README.md)** - Two-Factor Authentication (2FA)
+- **[SMTP Setup](./docs/SMTP_SETUP.md)** - E-Mail-Server für Password Reset
+- **[Dokumentenverwaltung](./docs/DOCUMENT_SOURCES_GUIDE.md)** - Dokumente hochladen und verwalten
+
+Alle verfügbaren Guides: [docs/README.md](./docs/README.md)
