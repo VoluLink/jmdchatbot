@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     if (semantic) args.push("--semantic");
 
     // Execute Python script
-    return new Promise((resolve) => {
+    return new Promise<Response>((resolve) => {
       const pythonProcess = spawn("python", args, {
         cwd: path.join(process.cwd(), ".."),
       });

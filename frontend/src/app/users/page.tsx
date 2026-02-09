@@ -14,6 +14,8 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
+  Key,
+  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,9 +29,10 @@ interface User {
   lastLogin?: string;
 }
 
-type ModalType = 
+type ModalType =
   | { type: "add" }
   | { type: "delete"; user: User }
+  | { type: "reset-password"; user: User }
   | null;
 
 export default function UsersPage() {
@@ -40,7 +43,6 @@ export default function UsersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [modal, setModal] = useState<ModalType>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [resetPasswordStatus, setResetPasswordStatus] = useState<Record<string, "idle" | "sending" | "sent" | "error">>({});
 
   const fetchUsers = async () => {
     try {
@@ -95,32 +97,21 @@ export default function UsersPage() {
     }
   };
 
-  const handleSendPasswordReset = async (userId: string, userEmail: string) => {
-    setResetPasswordStatus((prev) => ({ ...prev, [userId]: "sending" }));
-
+  const handleResetPassword = async (userId: string, newPassword: string) => {
+    setBusyId(userId);
     try {
-      const res = await fetch("/api/auth/forgot-password", {
+      const res = await fetch("/api/auth/admin/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: userEmail }),
+        body: JSON.stringify({ userId, newPassword }),
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Fehler beim Senden der E-Mail");
-      }
-
-      setResetPasswordStatus((prev) => ({ ...prev, [userId]: "sent" }));
-      setTimeout(() => {
-        setResetPasswordStatus((prev) => ({ ...prev, [userId]: "idle" }));
-      }, 3000);
+      if (!res.ok) throw new Error(data.error || "Failed to reset password");
+      setModal(null);
     } catch (err) {
-      console.error("Failed to send password reset:", err);
-      setResetPasswordStatus((prev) => ({ ...prev, [userId]: "error" }));
-      setTimeout(() => {
-        setResetPasswordStatus((prev) => ({ ...prev, [userId]: "idle" }));
-      }, 3000);
+      setError(err instanceof Error ? err.message : "Failed to reset password");
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -322,49 +313,15 @@ export default function UsersPage() {
                     <td className="px-6 py-4">
                       {isAdmin ? (
                         <div className="flex items-center justify-end gap-2">
-                          {(() => {
-                            const status = resetPasswordStatus[user.id] || "idle";
-                            return (
-                              <button
-                                onClick={() => handleSendPasswordReset(user.id, user.email)}
-                                disabled={status === "sending" || status === "sent"}
-                                className={cn(
-                                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                                  status === "sent"
-                                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                    : status === "error"
-                                    ? "bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30"
-                                    : status === "sending"
-                                    ? "bg-[#0066C0]/20 text-[#66B3FF] border border-[#0066C0]/30 cursor-wait"
-                                    : "bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20",
-                                  "disabled:opacity-50 disabled:cursor-not-allowed"
-                                )}
-                                title="Passwort-Zurücksetzen-Link per E-Mail senden"
-                              >
-                                {status === "sending" ? (
-                                  <>
-                                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    <span>Senden...</span>
-                                  </>
-                                ) : status === "sent" ? (
-                                  <>
-                                    <CheckCircle2 className="w-3 h-3" />
-                                    <span>Gesendet</span>
-                                  </>
-                                ) : status === "error" ? (
-                                  <>
-                                    <AlertCircle className="w-3 h-3" />
-                                    <span>Fehler</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Mail className="w-3 h-3" />
-                                    <span>Reset</span>
-                                  </>
-                                )}
-                              </button>
-                            );
-                          })()}
+                          <button
+                            onClick={() => setModal({ type: "reset-password", user })}
+                            disabled={busyId === user.id}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Passwort zurücksetzen"
+                          >
+                            <Key className="w-3 h-3" />
+                            <span>Reset</span>
+                          </button>
                           <button
                             onClick={() => setModal({ type: "delete", user })}
                             disabled={busyId === user.id || user.id === currentUser?.id}
@@ -418,6 +375,16 @@ export default function UsersPage() {
           user={modal.user}
           onConfirm={() => handleDelete(modal.user.id)}
           onCancel={() => setModal(null)}
+        />
+      )}
+
+      {/* Reset Password Modal */}
+      {modal?.type === "reset-password" && (
+        <ResetPasswordModal
+          user={modal.user}
+          onConfirm={(newPassword) => handleResetPassword(modal.user.id, newPassword)}
+          onCancel={() => setModal(null)}
+          busy={busyId === modal.user.id}
         />
       )}
     </>
@@ -581,6 +548,132 @@ function DeleteUserModal({
             Löschen
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ResetPasswordModal({
+  user,
+  onConfirm,
+  onCancel,
+  busy,
+}: {
+  user: User;
+  onConfirm: (newPassword: string) => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (newPassword.length < 6) {
+      setError("Passwort muss mindestens 6 Zeichen lang sein");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError("Passwörter stimmen nicht überein");
+      return;
+    }
+
+    onConfirm(newPassword);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-[#2a2a2a] border border-white/15 rounded-2xl shadow-2xl p-6 w-full max-w-md animate-in fade-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-[#0066C0]/20 rounded-lg">
+            <Key className="h-5 w-5 text-[#0077DD]" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-white">Passwort zurücksetzen</h3>
+            <p className="text-sm text-slate-400">{user.name} ({user.email})</p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+            <p className="text-sm text-red-200">{error}</p>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">Neues Passwort</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="••••••••"
+                autoFocus
+                required
+                minLength={6}
+                className="w-full pl-10 pr-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20 transition-all"
+              />
+            </div>
+            <p className="text-xs text-slate-500 mt-1">Mindestens 6 Zeichen</p>
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">Passwort bestätigen</label>
+            <div className="relative">
+              <CheckCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                minLength={6}
+                className="w-full pl-10 pr-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20 transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 justify-end pt-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={busy}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-white/5 transition-colors disabled:opacity-50"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="submit"
+              disabled={!newPassword || !confirmPassword || busy}
+              className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#00529E] text-white hover:bg-[#0066C0] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+            >
+              {busy ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Speichern…</span>
+                </>
+              ) : (
+                <>
+                  <Key className="w-4 h-4" />
+                  <span>Passwort setzen</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

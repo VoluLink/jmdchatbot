@@ -1,12 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { spawn } from "child_process";
-import path from "path";
+import { jwtVerify } from "jose";
+import { query } from "@/lib/db";
+import {
+  generateId,
+  hashPassword,
+  normalizeEmail,
+  PASSWORD_MIN_LENGTH,
+} from "@/lib/auth";
+
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET || "your-secret-key-change-in-production"
+);
+
+async function isAdmin(request: NextRequest) {
+  const token = request.cookies.get("auth-token")?.value;
+  if (!token) {
+    return false;
+  }
+
+  try {
+    const verified = await jwtVerify(token, JWT_SECRET);
+    return verified.payload.role === "admin";
+  } catch {
+    return false;
+  }
+}
 
 // POST - Register new user
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, name } = body;
+    const { email, password, name, role } = body;
 
     if (!email || !password || !name) {
       return NextResponse.json(
@@ -15,55 +39,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call Python script to register user
-    return new Promise((resolve) => {
-      const pythonProcess = spawn(
-        "python",
-        [
-          "-m",
-          "src.auth.register_user",
-          email,
-          password,
-          name,
-        ],
-        {
-          cwd: path.join(process.cwd(), ".."),
-        }
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      return NextResponse.json(
+        { error: `Password must be at least ${PASSWORD_MIN_LENGTH} characters` },
+        { status: 400 }
       );
+    }
 
-      let stdout = "";
-      let stderr = "";
+    const normalizedEmail = normalizeEmail(email);
+    const desiredRole = role === "admin" ? "admin" : "user";
 
-      pythonProcess.stdout?.on("data", (data) => {
-        stdout += data.toString();
-      });
+    if (desiredRole === "admin" && !(await isAdmin(request))) {
+      return NextResponse.json(
+        { error: "Admin access required to create admin users" },
+        { status: 403 }
+      );
+    }
 
-      pythonProcess.stderr?.on("data", (data) => {
-        stderr += data.toString();
-      });
+    const existing = await query(
+      "SELECT id FROM users WHERE email = $1",
+      [normalizedEmail]
+    );
 
-      pythonProcess.on("close", (code) => {
-        if (code === 0) {
-          try {
-            const result = JSON.parse(stdout);
-            resolve(NextResponse.json(result));
-          } catch {
-            resolve(
-              NextResponse.json({
-                success: true,
-                message: "User registered successfully",
-              })
-            );
-          }
-        } else {
-          resolve(
-            NextResponse.json(
-              { error: stderr || "Registration failed" },
-              { status: 400 }
-            )
-          );
-        }
-      });
+    if (existing.rowCount) {
+      return NextResponse.json(
+        { error: "Email already exists" },
+        { status: 400 }
+      );
+    }
+
+    const userId = generateId("user");
+    const passwordHash = await hashPassword(password);
+    const createdAt = new Date().toISOString();
+
+    await query(
+      `INSERT INTO users
+        (id, email, name, password_hash, role, created_at, is_active, two_fa_enabled)
+       VALUES ($1, $2, $3, $4, $5, $6, true, false)`,
+      [userId, normalizedEmail, name, passwordHash, desiredRole, createdAt]
+    );
+
+    return NextResponse.json({
+      success: true,
+      user: {
+        id: userId,
+        email: normalizedEmail,
+        name,
+        role: desiredRole,
+      },
     });
   } catch (error) {
     console.error("Error registering user:", error);
@@ -73,4 +96,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

@@ -85,7 +85,7 @@ export function Sidebar({
         className="flex h-16 items-center px-5 border-b border-white/10 hover:bg-white/5 transition-colors"
       >
         <span className="text-[13px] font-semibold text-slate-100 tracking-wide uppercase">
-          amiko
+          JMDChatbot
         </span>
       </Link>
       

@@ -83,4 +83,9 @@ data/url_sources.json
 
 # Claude Code temporary files
 tmpclaude-*-cwd
-frontend/tmpclaude-*-cwd
+
+# Large files
+amiko-app.tar
+
+# Frontend local database
+frontend/data/

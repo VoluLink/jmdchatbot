@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">AMIKO</h1>
+          <h1 className="text-4xl font-bold text-white mb-2">JMDChatbot</h1>
           <p className="text-slate-400 text-sm">RAG Knowledge Base</p>
         </div>
 

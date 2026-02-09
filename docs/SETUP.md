@@ -41,6 +41,8 @@ cp env.example .env
 # OPENAI_API_KEY=sk-your-actual-key-here
 ```
 
+For production deployment, see `docs/PRODUCTION.md`.
+
 ### 3. Initialize Database & Index
 
 ```bash

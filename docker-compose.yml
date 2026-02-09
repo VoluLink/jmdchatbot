@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rag_user
+      POSTGRES_PASSWORD: rag_password
+      POSTGRES_DB: rag_auth
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build: ./frontend
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://rag_user:rag_password@postgres:5432/rag_auth
+      JWT_SECRET: change-me
+      FRONTEND_URL: http://localhost:3000
+      NEXT_PUBLIC_API_BASE_URL: http://host.docker.internal:8000
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:

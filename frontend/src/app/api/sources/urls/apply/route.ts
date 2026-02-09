@@ -27,23 +27,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Execute Python script
-    return new Promise((resolve) => {
-      const process = spawn("python", args, {
+    return new Promise<Response>((resolve) => {
+      const childProcess = spawn("python", args, {
         cwd: path.join(process.cwd(), ".."),
       });
 
       let stdout = "";
       let stderr = "";
 
-      process.stdout?.on("data", (data) => {
+      childProcess.stdout?.on("data", (data) => {
         stdout += data.toString();
       });
 
-      process.stderr?.on("data", (data) => {
+      childProcess.stderr?.on("data", (data) => {
         stderr += data.toString();
       });
 
-      process.on("close", (code) => {
+      childProcess.on("close", (code) => {
         if (code === 0) {
           resolve(
             NextResponse.json({

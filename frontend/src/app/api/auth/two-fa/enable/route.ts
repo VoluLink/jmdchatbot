@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { spawn } from "child_process";
-import path from "path";
 import { jwtVerify } from "jose";
+import { query } from "@/lib/db";
+import { generateBackupCodes } from "@/lib/auth";
+import { verifyTotp } from "@/lib/twofa";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "your-secret-key-change-in-production"
@@ -10,7 +11,6 @@ const JWT_SECRET = new TextEncoder().encode(
 // POST - Enable 2FA after verifying TOTP code
 export async function POST(request: NextRequest) {
   try {
-    // Verify JWT
     const token = request.cookies.get("auth-token")?.value;
 
     if (!token) {
@@ -33,77 +33,56 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call Python script to enable 2FA
-    return new Promise((resolve) => {
-      const enableProcess = spawn(
-        "python",
-        ["-m", "src.auth.two_fa_enable", userId, verificationCode],
-        {
-          cwd: path.join(process.cwd(), ".."),
-        }
+    const userResult = await query(
+      "SELECT totp_secret FROM users WHERE id = $1 AND is_active = true",
+      [userId]
+    );
+
+    if (!userResult.rowCount || !userResult.rows[0].totp_secret) {
+      return NextResponse.json(
+        { error: "2FA setup not initialized" },
+        { status: 400 }
       );
+    }
 
-      let stdout = "";
-      let stderr = "";
+    const secret = userResult.rows[0].totp_secret as string;
+    const isValid = verifyTotp(verificationCode, secret);
 
-      enableProcess.stdout?.on("data", (data) => {
-        stdout += data.toString();
-      });
+    if (!isValid) {
+      return NextResponse.json(
+        { error: "Invalid verification code" },
+        { status: 400 }
+      );
+    }
 
-      enableProcess.stderr?.on("data", (data) => {
-        stderr += data.toString();
-      });
+    await query(
+      "UPDATE users SET two_fa_enabled = true, two_fa_enrolled_at = $1 WHERE id = $2",
+      [new Date().toISOString(), userId]
+    );
 
-      enableProcess.on("close", (code) => {
-        if (code === 0) {
-          try {
-            const result = JSON.parse(stdout);
+    await query("DELETE FROM two_fa_backup_codes WHERE user_id = $1", [
+      userId,
+    ]);
 
-            if (result.success) {
-              resolve(
-                NextResponse.json({
-                  success: true,
-                  backupCodes: result.backup_codes,
-                })
-              );
-            } else {
-              resolve(
-                NextResponse.json(
-                  { error: result.error || "Failed to enable 2FA" },
-                  { status: 400 }
-                )
-              );
-            }
-          } catch (err) {
-            console.error("Failed to parse enable output:", stdout, stderr);
-            resolve(
-              NextResponse.json(
-                { error: "Failed to enable 2FA" },
-                { status: 500 }
-              )
-            );
-          }
-        } else {
-          // Try to parse error from stdout
-          try {
-            const result = JSON.parse(stdout);
-            resolve(
-              NextResponse.json(
-                { error: result.error || "Failed to enable 2FA" },
-                { status: 400 }
-              )
-            );
-          } catch {
-            console.error("Enable process failed:", stderr);
-            resolve(
-              NextResponse.json(
-                { error: "Invalid verification code" },
-                { status: 400 }
-              )
-            );
-          }
-        }
-      });
+    const { plainCodes, hashedCodes } = await generateBackupCodes(8);
+
+    for (let i = 0; i < hashedCodes.length; i += 1) {
+      await query(
+        `INSERT INTO two_fa_backup_codes
+          (id, user_id, code_hash, used, created_at)
+         VALUES ($1, $2, $3, false, $4)`,
+        [
+          `backup_${userId}_${i}_${Date.now()}`,
+          userId,
+          hashedCodes[i],
+          new Date().toISOString(),
+        ]
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      backupCodes: plainCodes,
     });
   } catch (error) {
     console.error("Error enabling 2FA:", error);

@@ -6,7 +6,7 @@ import path from "path";
 export async function POST() {
   try {
     // Execute Python script
-    return new Promise((resolve) => {
+    return new Promise<Response>((resolve) => {
       const pythonProcess = spawn("python", ["-m", "src.updater.url_refresh_job"], {
         cwd: path.join(process.cwd(), ".."),
       });

@@ -22,12 +22,12 @@ interface Message {
   id?: string;
 }
 
-// Allow overriding the backend URL (useful for deployments that can't reach localhost)
-const API_BASE_URL =
-  (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000").replace(
-    /\/$/,
-    ""
-  );
+// Allow overriding the backend URL (useful for deployments that can't reach localhost).
+// If not set, fall back to a relative path so a reverse proxy can route /query.
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(
+  /\/$/,
+  ""
+);
 
 export function ChatInterface() {
   const { currentSession, currentSessionId, updateSession, createSession, isLoaded } = useChatHistoryContext();

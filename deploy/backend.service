@@ -1,0 +1,14 @@
+[Unit]
+Description=RAG Backend (FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=G:/rag-seminararbeit
+EnvironmentFile=G:/rag-seminararbeit/deploy/backend.env
+ExecStart=G:/rag-seminararbeit/.venv/Scripts/python.exe -m uvicorn src.app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

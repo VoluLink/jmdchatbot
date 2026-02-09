@@ -1,16 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
-import path from "path";
-
-const DB_PATH = path.join(process.cwd(), "..", "data", "auth.db");
-
-async function getDb() {
-  return open({
-    filename: DB_PATH,
-    driver: sqlite3.Database,
-  });
-}
+import { query } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,10 +13,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const db = await getDb();
-
-    // Find token and associated user
-    const tokenData = await db.get(
+    const tokenResult = await query(
       `SELECT
         prt.id,
         prt.user_id,
@@ -37,20 +23,19 @@ export async function GET(request: NextRequest) {
         u.name
        FROM password_reset_tokens prt
        JOIN users u ON prt.user_id = u.id
-       WHERE prt.token = ? AND u.is_active = 1`,
+       WHERE prt.token = $1 AND u.is_active = true`,
       [token]
     );
 
-    await db.close();
-
-    if (!tokenData) {
+    if (!tokenResult.rowCount) {
       return NextResponse.json(
-        { error: "Ungültiges oder abgelaufenes Token" },
+        { error: "Ungueltiges oder abgelaufenes Token" },
         { status: 400 }
       );
     }
 
-    // Check if token has been used
+    const tokenData = tokenResult.rows[0];
+
     if (tokenData.used) {
       return NextResponse.json(
         { error: "Dieses Token wurde bereits verwendet" },
@@ -58,7 +43,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Check if token has expired
     const now = new Date();
     const expiresAt = new Date(tokenData.expires_at);
 
@@ -69,7 +53,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Token is valid
     return NextResponse.json({
       email: tokenData.email,
       valid: true,

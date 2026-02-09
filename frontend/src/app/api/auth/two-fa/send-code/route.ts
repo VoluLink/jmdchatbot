@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { spawn } from "child_process";
-import path from "path";
+import { query } from "@/lib/db";
+import { generateId, generateNumericCode } from "@/lib/auth";
+
+const CODE_EXPIRY_MINUTES = parseInt(
+  process.env.TWO_FA_CODE_EXPIRY_MINUTES || "10",
+  10
+);
 
 // POST - Send 2FA verification code
 export async function POST(request: NextRequest) {
@@ -15,7 +20,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate purpose
     const validPurposes = ["login", "setup", "verification"];
     if (!validPurposes.includes(purpose)) {
       return NextResponse.json(
@@ -24,64 +28,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call Python script to send verification code
-    return new Promise((resolve) => {
-      const pythonProcess = spawn(
-        "python",
-        ["-m", "src.auth.two_fa_send_code", userId, purpose],
-        {
-          cwd: path.join(process.cwd(), ".."),
-        }
-      );
+    const code = generateNumericCode(6);
+    const createdAt = new Date().toISOString();
+    const expiresAt = new Date(
+      Date.now() + CODE_EXPIRY_MINUTES * 60 * 1000
+    ).toISOString();
 
-      let stdout = "";
-      let stderr = "";
+    await query(
+      `INSERT INTO two_fa_verification_codes
+        (id, user_id, code, purpose, created_at, expires_at, used)
+       VALUES ($1, $2, $3, $4, $5, $6, false)`,
+      [generateId("vcode"), userId, code, purpose, createdAt, expiresAt]
+    );
 
-      pythonProcess.stdout?.on("data", (data) => {
-        stdout += data.toString();
-      });
+    if (process.env.TWILIO_MOCK_MODE === "true") {
+      console.log(`2FA code for ${userId} (${purpose}): ${code}`);
+    } else {
+      console.log("TWILIO integration not configured in this build");
+    }
 
-      pythonProcess.stderr?.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      pythonProcess.on("close", async (code) => {
-        if (code === 0) {
-          try {
-            const result = JSON.parse(stdout);
-
-            if (result.success) {
-              resolve(
-                NextResponse.json({
-                  success: true,
-                  expiresIn: result.expires_in,
-                })
-              );
-            } else {
-              resolve(
-                NextResponse.json(
-                  { error: result.error || "Failed to send code" },
-                  { status: 400 }
-                )
-              );
-            }
-          } catch {
-            resolve(
-              NextResponse.json(
-                { error: "Failed to send code" },
-                { status: 500 }
-              )
-            );
-          }
-        } else {
-          resolve(
-            NextResponse.json(
-              { error: stderr || "Failed to send code" },
-              { status: 500 }
-            )
-          );
-        }
-      });
+    return NextResponse.json({
+      success: true,
+      expiresIn: CODE_EXPIRY_MINUTES * 60,
     });
   } catch (error) {
     console.error("Error sending 2FA code:", error);

@@ -1,6 +1,6 @@
-# AMIKO Frontend
+# JMDChatbot Frontend
 
-Next.js 14 Frontend für das AMIKO RAG Knowledge Base System.
+Next.js 16 Frontend für das JMDChatbot RAG Knowledge Base System.
 
 ## Quick Start
 

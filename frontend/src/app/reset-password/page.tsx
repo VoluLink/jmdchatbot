@@ -153,7 +153,7 @@ export default function ResetPasswordPage() {
           )}
 
           {/* Reset Form */}
-          {status === "valid" && (
+          {(status === "valid" || status === "resetting") && (
             <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
                 <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg">

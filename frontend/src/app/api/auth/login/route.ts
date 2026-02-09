@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { spawn } from "child_process";
-import path from "path";
 import { SignJWT } from "jose";
+import { query } from "@/lib/db";
+import {
+  generateId,
+  generateToken,
+  normalizeEmail,
+  verifyPassword,
+  maskPhoneNumber,
+} from "@/lib/auth";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "your-secret-key-change-in-production"
+);
+
+const SESSION_EXPIRY_MINUTES = parseInt(
+  process.env.TWO_FA_SESSION_EXPIRY_MINUTES || "15",
+  10
 );
 
 // POST - Login user
@@ -20,145 +31,95 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call Python script to verify user
-    return new Promise((resolve) => {
-      const pythonProcess = spawn(
-        "python",
-        ["-m", "src.auth.verify_user", email, password],
-        {
-          cwd: path.join(process.cwd(), ".."),
-        }
+    const normalizedEmail = normalizeEmail(email);
+
+    const result = await query(
+      `SELECT id, email, name, role, password_hash, two_fa_enabled, phone_number, must_change_password
+       FROM users
+       WHERE email = $1 AND is_active = true`,
+      [normalizedEmail]
+    );
+
+    if (result.rowCount === 0) {
+      return NextResponse.json(
+        { error: "Invalid credentials" },
+        { status: 401 }
+      );
+    }
+
+    const user = result.rows[0];
+    const passwordOk = await verifyPassword(password, user.password_hash);
+
+    if (!passwordOk) {
+      return NextResponse.json(
+        { error: "Invalid credentials" },
+        { status: 401 }
+      );
+    }
+
+    if (user.two_fa_enabled) {
+      const sessionToken = generateToken(32);
+      const createdAt = new Date().toISOString();
+      const expiresAt = new Date(
+        Date.now() + SESSION_EXPIRY_MINUTES * 60 * 1000
+      ).toISOString();
+
+      await query(
+        `INSERT INTO two_fa_pending_sessions
+          (id, user_id, token, purpose, created_at, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          generateId("session"),
+          user.id,
+          sessionToken,
+          "login",
+          createdAt,
+          expiresAt,
+        ]
       );
 
-      let stdout = "";
-      let stderr = "";
-
-      pythonProcess.stdout?.on("data", (data) => {
-        stdout += data.toString();
+      return NextResponse.json({
+        requiresTwoFa: true,
+        sessionToken,
+        phoneNumberMasked: maskPhoneNumber(user.phone_number || ""),
       });
+    }
 
-      pythonProcess.stderr?.on("data", (data) => {
-        stderr += data.toString();
-      });
+    await query(
+      "UPDATE users SET last_login = $1 WHERE id = $2",
+      [new Date().toISOString(), user.id]
+    );
 
-      pythonProcess.on("close", async (code) => {
-        if (code === 0) {
-          try {
-            const user = JSON.parse(stdout);
+    const token = await new SignJWT({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("7d")
+      .sign(JWT_SECRET);
 
-            // Check if 2FA is enabled
-            if (user.twoFaEnabled) {
-              // Create pending 2FA session and send verification code
-              const createSessionProcess = spawn(
-                "python",
-                ["-c", `
-import sys
-import json
-from src.auth.two_fa_manager import create_pending_session, send_verification_code, mask_phone_number
-
-user_id = sys.argv[1]
-session_token = create_pending_session(user_id, expiry_minutes=15)
-send_result = send_verification_code(user_id, "login")
-
-# Get masked phone number
-from src.auth.user_manager import find_user_by_id
-user_data = find_user_by_id(user_id)
-phone_masked = mask_phone_number(user_data.get("phoneNumber", "")) if user_data else ""
-
-print(json.dumps({
-    "session_token": session_token,
-    "phone_masked": phone_masked,
-    "send_success": send_result.get("success", False)
-}))
-                `.trim(), user.id],
-                {
-                  cwd: path.join(process.cwd(), ".."),
-                }
-              );
-
-              let sessionStdout = "";
-
-              createSessionProcess.stdout?.on("data", (data) => {
-                sessionStdout += data.toString();
-              });
-
-              createSessionProcess.on("close", (sessionCode) => {
-                if (sessionCode === 0) {
-                  try {
-                    const sessionData = JSON.parse(sessionStdout);
-
-                    resolve(
-                      NextResponse.json({
-                        requiresTwoFa: true,
-                        sessionToken: sessionData.session_token,
-                        phoneNumberMasked: sessionData.phone_masked,
-                      })
-                    );
-                  } catch {
-                    resolve(
-                      NextResponse.json(
-                        { error: "Failed to initiate 2FA" },
-                        { status: 500 }
-                      )
-                    );
-                  }
-                } else {
-                  resolve(
-                    NextResponse.json(
-                      { error: "Failed to initiate 2FA" },
-                      { status: 500 }
-                    )
-                  );
-                }
-              });
-            } else {
-              // No 2FA - proceed with regular login
-              // Create JWT token
-              const token = await new SignJWT({ userId: user.id, email: user.email, role: user.role })
-                .setProtectedHeader({ alg: "HS256" })
-                .setIssuedAt()
-                .setExpirationTime("7d")
-                .sign(JWT_SECRET);
-
-              const response = NextResponse.json({
-                success: true,
-                user: {
-                  id: user.id,
-                  email: user.email,
-                  name: user.name,
-                  role: user.role,
-                },
-              });
-
-              // Set HTTP-only cookie
-              response.cookies.set("auth-token", token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax",
-                maxAge: 60 * 60 * 24 * 7, // 7 days
-                path: "/",
-              });
-
-              resolve(response);
-            }
-          } catch {
-            resolve(
-              NextResponse.json(
-                { error: "Invalid credentials" },
-                { status: 401 }
-              )
-            );
-          }
-        } else {
-          resolve(
-            NextResponse.json(
-              { error: "Invalid credentials" },
-              { status: 401 }
-            )
-          );
-        }
-      });
+    const response = NextResponse.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+      mustChangePassword: !!user.must_change_password,
     });
+
+    response.cookies.set("auth-token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/",
+    });
+
+    return response;
   } catch (error) {
     console.error("Error logging in:", error);
     return NextResponse.json(
@@ -167,4 +128,3 @@ print(json.dumps({
     );
   }
 }
-

@@ -40,6 +40,10 @@ export default function LoginPage() {
       if (data.requiresTwoFa) {
         setRequiresTwoFa(true);
         setSessionToken(data.sessionToken);
+      } else if (data.mustChangePassword) {
+        // User must change password - redirect to change password page
+        router.push("/change-password");
+        router.refresh();
       } else {
         // Regular login success - redirect to home
         router.push("/");
@@ -74,9 +78,15 @@ export default function LoginPage() {
       }
 
       if (data.success) {
-        // 2FA success - redirect to home
-        router.push("/");
-        router.refresh();
+        if (data.mustChangePassword) {
+          // User must change password
+          router.push("/change-password");
+          router.refresh();
+        } else {
+          // 2FA success - redirect to home
+          router.push("/");
+          router.refresh();
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ungültiger Code");
@@ -98,7 +108,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">AMIKO</h1>
+          <h1 className="text-4xl font-bold text-white mb-2">JMDChatbot</h1>
           <p className="text-slate-400 text-sm">RAG Knowledge Base</p>
         </div>
 
@@ -149,14 +159,6 @@ export default function LoginPage() {
                   required
                   className="w-full pl-11 pr-4 py-3 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0077DD]/50 focus:ring-2 focus:ring-[#0077DD]/20 transition-all"
                 />
-              </div>
-              <div className="text-right">
-                <Link
-                  href="/forgot-password"
-                  className="text-sm text-[#0077DD] hover:text-[#66B3FF] font-medium transition-colors"
-                >
-                  Passwort vergessen?
-                </Link>
               </div>
             </div>
 
@@ -240,7 +242,7 @@ export default function LoginPage() {
           {!requiresTwoFa && (
             <div className="mt-6 pt-6 border-t border-white/10">
               <p className="text-xs text-slate-500 text-center">
-                Standard-Admin: admin@amiko.local / admin123
+                Standard-Admin: admin@kjf.de / admin
               </p>
             </div>
           )}

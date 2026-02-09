@@ -1,17 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
 import bcrypt from "bcryptjs";
-import path from "path";
-
-const DB_PATH = path.join(process.cwd(), "..", "data", "auth.db");
-
-async function getDb() {
-  return open({
-    filename: DB_PATH,
-    driver: sqlite3.Database,
-  });
-}
+import { query } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,10 +20,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const db = await getDb();
-
-    // Find token
-    const tokenData = await db.get(
+    const tokenResult = await query(
       `SELECT
         prt.id,
         prt.user_id,
@@ -43,66 +29,57 @@ export async function POST(request: NextRequest) {
         u.email
        FROM password_reset_tokens prt
        JOIN users u ON prt.user_id = u.id
-       WHERE prt.token = ? AND u.is_active = 1`,
+       WHERE prt.token = $1 AND u.is_active = true`,
       [token]
     );
 
-    if (!tokenData) {
-      await db.close();
+    if (!tokenResult.rowCount) {
       return NextResponse.json(
-        { error: "Ungültiges oder abgelaufenes Token" },
+        { error: "Ungueltiges oder abgelaufenes Token" },
         { status: 400 }
       );
     }
 
-    // Check if token has been used
+    const tokenData = tokenResult.rows[0];
+
     if (tokenData.used) {
-      await db.close();
       return NextResponse.json(
         { error: "Dieses Token wurde bereits verwendet" },
         { status: 400 }
       );
     }
 
-    // Check if token has expired
     const now = new Date();
     const expiresAt = new Date(tokenData.expires_at);
 
     if (now > expiresAt) {
-      await db.close();
       return NextResponse.json(
         { error: "Dieses Token ist abgelaufen" },
         { status: 400 }
       );
     }
 
-    // Hash new password
     const passwordHash = await bcrypt.hash(newPassword, 10);
 
-    // Update user password
-    await db.run(
-      "UPDATE users SET password_hash = ? WHERE id = ?",
+    await query(
+      "UPDATE users SET password_hash = $1 WHERE id = $2",
       [passwordHash, tokenData.user_id]
     );
 
-    // Mark token as used
-    await db.run(
-      "UPDATE password_reset_tokens SET used = 1 WHERE id = ?",
+    await query(
+      "UPDATE password_reset_tokens SET used = true WHERE id = $1",
       [tokenData.id]
     );
 
-    // Optionally: Delete all other reset tokens for this user
-    await db.run(
-      "DELETE FROM password_reset_tokens WHERE user_id = ? AND id != ?",
+    await query(
+      "DELETE FROM password_reset_tokens WHERE user_id = $1 AND id != $2",
       [tokenData.user_id, tokenData.id]
     );
-
-    await db.close();
 
     console.log(`Password reset successful for user: ${tokenData.email}`);
 
     return NextResponse.json({
-      message: "Passwort erfolgreich geändert",
+      message: "Passwort erfolgreich geaendert",
     });
   } catch (error) {
     console.error("Reset password error:", error);

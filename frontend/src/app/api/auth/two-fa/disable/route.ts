@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { spawn } from "child_process";
-import path from "path";
 import { jwtVerify } from "jose";
+import { query } from "@/lib/db";
+import { verifyPassword, normalizeEmail } from "@/lib/auth";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "your-secret-key-change-in-production"
@@ -10,7 +10,6 @@ const JWT_SECRET = new TextEncoder().encode(
 // POST - Disable 2FA for authenticated user
 export async function POST(request: NextRequest) {
   try {
-    // Verify JWT
     const token = request.cookies.get("auth-token")?.value;
 
     if (!token) {
@@ -34,80 +33,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // First, verify the password
-    return new Promise((resolve) => {
-      const verifyProcess = spawn(
-        "python",
-        ["-m", "src.auth.verify_user", userEmail, password],
-        {
-          cwd: path.join(process.cwd(), ".."),
-        }
+    const userResult = await query(
+      "SELECT password_hash FROM users WHERE id = $1 AND email = $2 AND is_active = true",
+      [userId, normalizeEmail(userEmail)]
+    );
+
+    if (!userResult.rowCount) {
+      return NextResponse.json(
+        { error: "Invalid password" },
+        { status: 401 }
       );
+    }
 
-      verifyProcess.on("close", (code) => {
-        if (code !== 0) {
-          resolve(
-            NextResponse.json(
-              { error: "Invalid password" },
-              { status: 401 }
-            )
-          );
-          return;
-        }
+    const passwordOk = await verifyPassword(
+      password,
+      userResult.rows[0].password_hash
+    );
 
-        // Password is valid, now disable 2FA
-        const disableProcess = spawn(
-          "python",
-          ["-m", "src.auth.two_fa_disable", userId],
-          {
-            cwd: path.join(process.cwd(), ".."),
-          }
-        );
+    if (!passwordOk) {
+      return NextResponse.json(
+        { error: "Invalid password" },
+        { status: 401 }
+      );
+    }
 
-        let stdout = "";
+    await query(
+      "UPDATE users SET two_fa_enabled = false, totp_secret = NULL, two_fa_enrolled_at = NULL WHERE id = $1",
+      [userId]
+    );
 
-        disableProcess.stdout?.on("data", (data) => {
-          stdout += data.toString();
-        });
+    await query("DELETE FROM two_fa_backup_codes WHERE user_id = $1", [
+      userId,
+    ]);
+    await query("DELETE FROM two_fa_pending_sessions WHERE user_id = $1", [
+      userId,
+    ]);
+    await query("DELETE FROM two_fa_verification_codes WHERE user_id = $1", [
+      userId,
+    ]);
 
-        disableProcess.on("close", (code) => {
-          if (code === 0) {
-            try {
-              const result = JSON.parse(stdout);
-
-              if (result.success) {
-                resolve(
-                  NextResponse.json({
-                    success: true,
-                  })
-                );
-              } else {
-                resolve(
-                  NextResponse.json(
-                    { error: result.error || "Failed to disable 2FA" },
-                    { status: 400 }
-                  )
-                );
-              }
-            } catch {
-              resolve(
-                NextResponse.json(
-                  { error: "Failed to disable 2FA" },
-                  { status: 500 }
-                )
-              );
-            }
-          } else {
-            resolve(
-              NextResponse.json(
-                { error: "Failed to disable 2FA" },
-                { status: 500 }
-              )
-            );
-          }
-        });
-      });
-    });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error disabling 2FA:", error);
     return NextResponse.json(
