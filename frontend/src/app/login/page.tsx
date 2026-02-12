@@ -227,25 +227,11 @@ export default function LoginPage() {
           {!requiresTwoFa && (
             <div className="mt-6 text-center">
               <p className="text-sm text-slate-400">
-                Noch kein Konto?{" "}
-                <Link
-                  href="/register"
-                  className="text-[#0077DD] hover:text-[#66B3FF] font-medium transition-colors"
-                >
-                  Jetzt registrieren
-                </Link>
+                Noch kein Konto? Bitte beim Administrator einen Einladungslink anfordern.
               </p>
             </div>
           )}
 
-          {/* Default Credentials (Development) */}
-          {!requiresTwoFa && (
-            <div className="mt-6 pt-6 border-t border-white/10">
-              <p className="text-xs text-slate-500 text-center">
-                Standard-Admin: admin@kjf.de / admin
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>

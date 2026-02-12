@@ -18,6 +18,14 @@ const SESSION_EXPIRY_MINUTES = parseInt(
   10
 );
 
+function isSecureRequest(request: NextRequest): boolean {
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  if (forwardedProto) {
+    return forwardedProto.split(",")[0].trim() === "https";
+  }
+  return request.nextUrl.protocol === "https:";
+}
+
 // POST - Login user
 export async function POST(request: NextRequest) {
   try {
@@ -113,7 +121,7 @@ export async function POST(request: NextRequest) {
 
     response.cookies.set("auth-token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: isSecureRequest(request),
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7,
       path: "/",

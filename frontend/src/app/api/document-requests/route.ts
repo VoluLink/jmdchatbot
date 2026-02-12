@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { jwtVerify } from "jose";
+import { DATA_DIR } from "../document-management/_paths";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "your-secret-key-change-in-production"
 );
 
-const REQUESTS_FILE = path.join(process.cwd(), "..", "data", "document_requests.json");
+const REQUESTS_FILE = path.join(DATA_DIR, "document_requests.json");
 
 type DocumentRequest = {
   id: string;
@@ -39,6 +40,8 @@ async function getUserFromToken(request: NextRequest) {
 }
 
 async function ensureRequestsFile() {
+  await fs.mkdir(path.dirname(REQUESTS_FILE), { recursive: true });
+
   try {
     await fs.access(REQUESTS_FILE);
   } catch {

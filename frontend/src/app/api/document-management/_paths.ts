@@ -1,6 +1,13 @@
 import path from "path";
 
-export const SOURCES_DIR = path.join(process.cwd(), "..", "data", "sources");
+const resolvedDataDir = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.resolve(process.cwd(), "..", "data");
+
+export const DATA_DIR = resolvedDataDir;
+export const SOURCES_DIR = process.env.LOCAL_DATA_DIR
+  ? path.resolve(process.env.LOCAL_DATA_DIR)
+  : path.join(DATA_DIR, "sources");
 
 export function normalizeRelPath(relPath: string) {
   const normalized = (relPath ?? "").replace(/\\/g, "/");

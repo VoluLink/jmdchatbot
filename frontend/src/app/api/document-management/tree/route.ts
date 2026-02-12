@@ -51,6 +51,9 @@ async function buildTree(relDir: string): Promise<TreeNode> {
 
 export async function GET() {
   try {
+    const { absTarget: rootDir } = resolveUnderSources("");
+    await fs.mkdir(rootDir, { recursive: true });
+
     const tree = await buildTree("");
     return NextResponse.json({ tree });
   } catch (error) {

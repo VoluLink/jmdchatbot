@@ -28,7 +28,6 @@
 - `DOCUMENT_SOURCES_GUIDE.md` - Dokumentenverwaltung
 - `SETUP.md` - Detaillierte Setup-Anleitung
 - `SETUP_AUTOMATED_CHECKS.md` - System-Checks
-- `SMTP_SETUP.md` - E-Mail-Konfiguration
 - `QUICK_REFERENCE.md` - Schnellreferenz
 - `README.md` - Docs-Übersicht
 
@@ -54,7 +53,6 @@ rag-seminararbeit/
 │   ├── README.md
 │   ├── SETUP.md
 │   ├── QUICK_REFERENCE.md
-│   ├── SMTP_SETUP.md
 │   └── ...
 ├── frontend/                # Next.js Frontend
 │   ├── src/

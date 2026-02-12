@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
+import { DATA_DIR } from "../../document-management/_paths";
 
 type UrlSource = {
   id: string;
@@ -14,9 +15,11 @@ type UrlSource = {
   updatedAt: string;
 };
 
-const URL_SOURCES_PATH = path.join(process.cwd(), "..", "data", "url_sources.json");
+const URL_SOURCES_PATH = path.join(DATA_DIR, "url_sources.json");
 
 async function readUrlSources(): Promise<UrlSource[]> {
+  await fs.mkdir(path.dirname(URL_SOURCES_PATH), { recursive: true });
+
   try {
     const data = await fs.readFile(URL_SOURCES_PATH, "utf-8");
     return JSON.parse(data);
@@ -27,6 +30,7 @@ async function readUrlSources(): Promise<UrlSource[]> {
 }
 
 async function writeUrlSources(sources: UrlSource[]): Promise<void> {
+  await fs.mkdir(path.dirname(URL_SOURCES_PATH), { recursive: true });
   await fs.writeFile(URL_SOURCES_PATH, JSON.stringify(sources, null, 2), "utf-8");
 }
 

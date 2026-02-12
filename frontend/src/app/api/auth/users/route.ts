@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { randomBytes } from "crypto";
 import { query } from "@/lib/db";
+import { generateId, hashPassword, normalizeEmail } from "@/lib/auth";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "your-secret-key-change-in-production"
@@ -28,6 +30,127 @@ async function verifyAdmin(request: NextRequest) {
   }
 }
 
+const INVITE_EXPIRY_MINUTES = parseInt(
+  process.env.INVITE_LINK_EXPIRY_MINUTES || "10080",
+  10
+);
+
+async function createInviteLink(userId: string) {
+  const token = randomBytes(32).toString("hex");
+  const tokenId = generateId("prt");
+  const createdAt = new Date().toISOString();
+  const expiresAt = new Date(
+    Date.now() + INVITE_EXPIRY_MINUTES * 60 * 1000
+  ).toISOString();
+
+  await query("DELETE FROM password_reset_tokens WHERE user_id = $1", [userId]);
+  await query(
+    `INSERT INTO password_reset_tokens
+      (id, user_id, token, created_at, expires_at, used)
+     VALUES ($1, $2, $3, $4, $5, false)`,
+    [tokenId, userId, token, createdAt, expiresAt]
+  );
+
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  return {
+    inviteLink: `${frontendUrl}/reset-password?token=${token}`,
+    expiresAt,
+  };
+}
+
+// POST - Whitelist/invite user (admin only)
+export async function POST(request: NextRequest) {
+  const auth = await verifyAdmin(request);
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: 403 });
+  }
+
+  try {
+    const body = (await request.json()) as {
+      email?: string;
+      name?: string;
+      role?: "admin" | "user";
+    };
+
+    const normalizedEmail = normalizeEmail(body.email || "");
+    const name = (body.name || "").trim();
+    const role = body.role === "admin" ? "admin" : "user";
+
+    if (!normalizedEmail) {
+      return NextResponse.json({ error: "Email is required" }, { status: 400 });
+    }
+
+    if (!name) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    }
+
+    const existing = await query<{
+      id: string;
+      role: "admin" | "user";
+      is_active: boolean;
+      must_change_password: boolean;
+    }>(
+      `SELECT id, role, is_active, must_change_password
+       FROM users
+       WHERE email = $1
+       LIMIT 1`,
+      [normalizedEmail]
+    );
+
+    let userId: string;
+
+    if (existing.rowCount) {
+      const user = existing.rows[0];
+      userId = user.id;
+
+      if (user.is_active && !user.must_change_password) {
+        return NextResponse.json(
+          { error: "User already active. Use password reset instead." },
+          { status: 400 }
+        );
+      }
+
+      await query(
+        `UPDATE users
+         SET name = $1,
+             role = $2,
+             is_active = true,
+             must_change_password = true
+         WHERE id = $3`,
+        [name, role, userId]
+      );
+    } else {
+      userId = generateId("user");
+      const createdAt = new Date().toISOString();
+      const tempPasswordHash = await hashPassword(randomBytes(24).toString("hex"));
+
+      await query(
+        `INSERT INTO users
+          (id, email, name, password_hash, role, created_at, is_active, two_fa_enabled, must_change_password)
+         VALUES ($1, $2, $3, $4, $5, $6, true, false, true)`,
+        [userId, normalizedEmail, name, tempPasswordHash, role, createdAt]
+      );
+    }
+
+    const { inviteLink, expiresAt } = await createInviteLink(userId);
+
+    return NextResponse.json({
+      success: true,
+      user: {
+        id: userId,
+        email: normalizedEmail,
+        name,
+        role,
+      },
+      inviteLink,
+      expiresAt,
+    });
+  } catch (error) {
+    console.error("Failed to invite user:", error);
+    return NextResponse.json({ error: "Failed to invite user" }, { status: 500 });
+  }
+}
+
 // GET - List all users (admin only)
 export async function GET(request: NextRequest) {
   const auth = await verifyAdmin(request);
@@ -37,7 +160,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await query(
-      `SELECT id, name, email, role, created_at, last_login
+      `SELECT id, name, email, role, created_at, last_login, must_change_password
        FROM users
        WHERE is_active = true
        ORDER BY created_at DESC`
@@ -50,6 +173,7 @@ export async function GET(request: NextRequest) {
       role: row.role,
       createdAt: row.created_at,
       lastLogin: row.last_login,
+      invitePending: !!row.must_change_password,
     }));
 
     return NextResponse.json({ users });

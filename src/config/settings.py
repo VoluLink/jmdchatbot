@@ -49,18 +49,6 @@ class Settings(BaseSettings):
     use_query_transform: bool = True
     query_transform_strategy: str = "hyde"  # 'hyde', 'multi_query', or 'combined'
 
-    # Email / SMTP Configuration
-    smtp_host: str = "smtp.gmail.com"
-    smtp_port: int = 587
-    smtp_username: str = ""
-    smtp_password: str = ""
-    smtp_from_email: str = ""
-    smtp_from_name: str = "RAG Assistant"
-
-    # Password Reset
-    password_reset_expiry_minutes: int = 60
-    frontend_url: str = "http://localhost:3000"
-
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import {
@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Key,
   Lock,
+  Copy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,6 +28,7 @@ interface User {
   role: "admin" | "user";
   createdAt: string;
   lastLogin?: string;
+  invitePending?: boolean;
 }
 
 type ModalType =
@@ -40,6 +42,11 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [inviteInfo, setInviteInfo] = useState<{
+    email: string;
+    link: string;
+    expiresAt: string;
+  } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [modal, setModal] = useState<ModalType>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -61,20 +68,28 @@ export default function UsersPage() {
     fetchUsers();
   }, []);
 
-  const handleAddUser = async (name: string, email: string, password: string, role: "admin" | "user") => {
+  const handleAddUser = async (name: string, email: string, role: "admin" | "user") => {
     setBusyId("new");
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await fetch("/api/auth/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, role }),
+        body: JSON.stringify({ name, email, role }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create user");
+      if (!res.ok) throw new Error(data.error || "Failed to invite user");
+      if (!data.inviteLink || !data.expiresAt) {
+        throw new Error("Invite link was not generated");
+      }
+      setInviteInfo({
+        email: data.user?.email || email,
+        link: data.inviteLink,
+        expiresAt: data.expiresAt,
+      });
       await fetchUsers();
       setModal(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create user");
+      setError(err instanceof Error ? err.message : "Failed to invite user");
     } finally {
       setBusyId(null);
     }
@@ -124,7 +139,7 @@ export default function UsersPage() {
   const userCount = users.filter(u => u.role === "user").length;
 
   const formatDate = (isoString?: string) => {
-    if (!isoString) return "–";
+    if (!isoString) return "â€“";
     return new Date(isoString).toLocaleDateString("de-DE", {
       day: "numeric",
       month: "short",
@@ -135,6 +150,15 @@ export default function UsersPage() {
   };
 
   const isAdmin = currentUser?.role === "admin";
+
+  const copyInviteLink = async () => {
+    if (!inviteInfo?.link) return;
+    try {
+      await navigator.clipboard.writeText(inviteInfo.link);
+    } catch {
+      setError("Einladungslink konnte nicht kopiert werden");
+    }
+  };
 
   if (loading) {
     return (
@@ -169,7 +193,7 @@ export default function UsersPage() {
                 className="flex items-center gap-2 px-4 py-2.5 bg-[#00529E] hover:bg-[#0066C0] text-white rounded-lg transition-colors font-medium"
               >
                 <UserPlus className="h-4 w-4" />
-                Benutzer hinzufügen
+                Benutzer einladen
               </button>
             )}
           </div>
@@ -181,6 +205,27 @@ export default function UsersPage() {
               <button onClick={() => setError(null)} className="p-1 hover:bg-red-500/20 rounded">
                 <X className="w-4 h-4 text-red-200" />
               </button>
+            </div>
+          )}
+
+          {inviteInfo && (
+            <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg space-y-2">
+              <p className="text-sm text-emerald-200">
+                Einladung erstellt fÃ¼r <span className="font-medium">{inviteInfo.email}</span>.
+              </p>
+              <p className="text-xs text-emerald-300/80 break-all">{inviteInfo.link}</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={copyInviteLink}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30 transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  Link kopieren
+                </button>
+                <span className="text-xs text-emerald-300/70">
+                  GÃ¼ltig bis {formatDate(inviteInfo.expiresAt)}
+                </span>
+              </div>
             </div>
           )}
 
@@ -281,24 +326,31 @@ export default function UsersPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={cn(
-                        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium",
-                        user.role === "admin"
-                          ? "bg-purple-500/20 text-purple-400"
-                          : "bg-[#00529E]/20 text-[#66B3FF]"
-                      )}>
-                        {user.role === "admin" ? (
-                          <>
-                            <Crown className="h-3 w-3" />
-                            Administrator
-                          </>
-                        ) : (
-                          <>
-                            <UserIcon className="h-3 w-3" />
-                            Benutzer
-                          </>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={cn(
+                          "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium",
+                          user.role === "admin"
+                            ? "bg-purple-500/20 text-purple-400"
+                            : "bg-[#00529E]/20 text-[#66B3FF]"
+                        )}>
+                          {user.role === "admin" ? (
+                            <>
+                              <Crown className="h-3 w-3" />
+                              Administrator
+                            </>
+                          ) : (
+                            <>
+                              <UserIcon className="h-3 w-3" />
+                              Benutzer
+                            </>
+                          )}
+                        </span>
+                        {user.invitePending && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/20 text-amber-300">
+                            Einladung offen
+                          </span>
                         )}
-                      </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm text-slate-400">
@@ -317,7 +369,7 @@ export default function UsersPage() {
                             onClick={() => setModal({ type: "reset-password", user })}
                             disabled={busyId === user.id}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Passwort zurücksetzen"
+                            title="Passwort zurÃ¼cksetzen"
                           >
                             <Key className="w-3 h-3" />
                             <span>Reset</span>
@@ -326,14 +378,14 @@ export default function UsersPage() {
                             onClick={() => setModal({ type: "delete", user })}
                             disabled={busyId === user.id || user.id === currentUser?.id}
                             className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={user.id === currentUser?.id ? "Kann dich selbst nicht löschen" : "Benutzer löschen"}
+                            title={user.id === currentUser?.id ? "Kann dich selbst nicht lÃ¶schen" : "Benutzer lÃ¶schen"}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
                       ) : (
                         <div className="flex items-center justify-end">
-                          <span className="text-xs text-slate-500">–</span>
+                          <span className="text-xs text-slate-500">â€“</span>
                         </div>
                       )}
                     </td>
@@ -355,7 +407,7 @@ export default function UsersPage() {
 
           {/* Footer note */}
           <p className="text-xs text-slate-500 text-center">
-            Benutzerdaten werden in SQLite gespeichert (data/auth.db)
+            Konten werden per Einladung freigeschaltet.
           </p>
         </div>
       </div>
@@ -396,19 +448,18 @@ function AddUserModal({
   onCancel,
   busy,
 }: {
-  onConfirm: (name: string, email: string, password: string, role: "admin" | "user") => void;
+  onConfirm: (name: string, email: string, role: "admin" | "user") => void;
   onCancel: () => void;
   busy: boolean;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "user">("user");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim() && email.trim() && password.trim()) {
-      onConfirm(name.trim(), email.trim(), password.trim(), role);
+    if (name.trim() && email.trim()) {
+      onConfirm(name.trim(), email.trim(), role);
     }
   };
 
@@ -421,7 +472,7 @@ function AddUserModal({
         className="bg-[#2a2a2a] border border-white/15 rounded-2xl shadow-2xl p-6 w-full max-w-md animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold text-white mb-4">Neuen Benutzer erstellen</h3>
+        <h3 className="text-lg font-semibold text-white mb-4">Benutzer einladen</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-slate-300 mb-2">Name</label>
@@ -446,21 +497,9 @@ function AddUserModal({
               required
               className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20 transition-all"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm text-slate-300 mb-2">Passwort</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              minLength={6}
-              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20 transition-all"
-            />
-            <p className="text-xs text-slate-500 mt-1">Mindestens 6 Zeichen</p>
-          </div>
+          </div>          <p className="text-xs text-slate-500">
+            Der Benutzer erhält einen Einladungslink und setzt sein Passwort selbst.
+          </p>
 
           <div>
             <label className="block text-sm text-slate-300 mb-2">Rolle</label>
@@ -485,18 +524,18 @@ function AddUserModal({
             </button>
             <button
               type="submit"
-              disabled={!name.trim() || !email.trim() || !password.trim() || busy}
+              disabled={!name.trim() || !email.trim() || busy}
               className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#00529E] text-white hover:bg-[#0066C0] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
             >
               {busy ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Erstelle…</span>
+                  <span>Erstelleâ€¦</span>
                 </>
               ) : (
                 <>
                   <UserPlus className="w-4 h-4" />
-                  <span>Erstellen</span>
+                  <span>Einladungslink erstellen</span>
                 </>
               )}
             </button>
@@ -525,12 +564,12 @@ function DeleteUserModal({
         className="bg-[#2a2a2a] border border-white/15 rounded-2xl shadow-2xl p-6 w-full max-w-md animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold text-white mb-4">Benutzer löschen?</h3>
+        <h3 className="text-lg font-semibold text-white mb-4">Benutzer lÃ¶schen?</h3>
         <p className="text-sm text-slate-300 mb-6">
-          Möchten Sie <span className="font-semibold text-white">{user.name}</span> ({user.email}) wirklich löschen?
+          MÃ¶chten Sie <span className="font-semibold text-white">{user.name}</span> ({user.email}) wirklich lÃ¶schen?
           {user.role === "admin" && (
             <span className="block mt-2 text-purple-300">
-              ⚠️ Dies ist ein Administrator-Account
+              âš ï¸ Dies ist ein Administrator-Account
             </span>
           )}
         </p>
@@ -545,7 +584,7 @@ function DeleteUserModal({
             onClick={onConfirm}
             className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-500 transition-all"
           >
-            Löschen
+            LÃ¶schen
           </button>
         </div>
       </div>
@@ -578,7 +617,7 @@ function ResetPasswordModal({
     }
 
     if (newPassword !== confirmPassword) {
-      setError("Passwörter stimmen nicht überein");
+      setError("PasswÃ¶rter stimmen nicht Ã¼berein");
       return;
     }
 
@@ -599,7 +638,7 @@ function ResetPasswordModal({
             <Key className="h-5 w-5 text-[#0077DD]" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-white">Passwort zurücksetzen</h3>
+            <h3 className="text-lg font-semibold text-white">Passwort zurÃ¼cksetzen</h3>
             <p className="text-sm text-slate-400">{user.name} ({user.email})</p>
           </div>
         </div>
@@ -620,7 +659,7 @@ function ResetPasswordModal({
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                 autoFocus
                 required
                 minLength={6}
@@ -631,14 +670,14 @@ function ResetPasswordModal({
           </div>
 
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Passwort bestätigen</label>
+            <label className="block text-sm text-slate-300 mb-2">Passwort bestÃ¤tigen</label>
             <div className="relative">
               <CheckCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                 required
                 minLength={6}
                 className="w-full pl-10 pr-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20 transition-all"
@@ -663,7 +702,7 @@ function ResetPasswordModal({
               {busy ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Speichern…</span>
+                  <span>Speichernâ€¦</span>
                 </>
               ) : (
                 <>
@@ -678,3 +717,4 @@ function ResetPasswordModal({
     </div>
   );
 }
+

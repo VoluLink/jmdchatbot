@@ -9,7 +9,27 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "your-secret-key-change-in-production"
 );
 
-async function issueJwt(user: { id: string; email: string; name: string; role: string; must_change_password?: boolean }) {
+type UserForJwt = {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  must_change_password?: boolean | null;
+};
+
+type UserWithTotp = UserForJwt & {
+  totp_secret?: string | null;
+};
+
+function isSecureRequest(request: NextRequest): boolean {
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  if (forwardedProto) {
+    return forwardedProto.split(",")[0].trim() === "https";
+  }
+  return request.nextUrl.protocol === "https:";
+}
+
+async function issueJwt(user: UserForJwt, request: NextRequest) {
   const token = await new SignJWT({
     userId: user.id,
     email: user.email,
@@ -33,7 +53,7 @@ async function issueJwt(user: { id: string; email: string; name: string; role: s
 
   response.cookies.set("auth-token", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecureRequest(request),
     sameSite: "lax",
     maxAge: 60 * 60 * 24 * 7,
     path: "/",
@@ -99,7 +119,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const userResult = await query(
+      const userResult = await query<UserWithTotp>(
         "SELECT id, email, name, role, totp_secret, must_change_password FROM users WHERE id = $1 AND is_active = true",
         [session.user_id]
       );
@@ -133,12 +153,12 @@ export async function POST(request: NextRequest) {
         user.id,
       ]);
 
-      return issueJwt(user);
+      return issueJwt(user, request);
     }
 
     if (purpose === "backup" && userId) {
       const email = normalizeEmail(userId);
-      const userResult = await query(
+      const userResult = await query<UserForJwt>(
         "SELECT id, email, name, role, must_change_password FROM users WHERE email = $1 AND is_active = true",
         [email]
       );
@@ -165,7 +185,7 @@ export async function POST(request: NextRequest) {
         user.id,
       ]);
 
-      return issueJwt(user);
+      return issueJwt(user, request);
     }
 
     return NextResponse.json(

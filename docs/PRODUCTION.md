@@ -81,4 +81,4 @@ Caddy will route:
 
 - If you don't use Caddy, set `NEXT_PUBLIC_API_BASE_URL` to your backend URL.
 - Keep Postgres port closed to the public internet.
-- Set `JWT_SECRET` and SMTP credentials to real values.
+- Set `JWT_SECRET` to a real value.

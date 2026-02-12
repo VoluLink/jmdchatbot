@@ -8,12 +8,12 @@ Diese Dokumentation enthält detaillierte Setup- und Konfigurationsanleitungen f
 
 - **[SETUP.md](./SETUP.md)** - Hauptanleitung für die Ersteinrichtung
 - **[QUICK_REFERENCE.md](./QUICK_REFERENCE.md)** - Schnellreferenz für häufige Aufgaben
+- **[UPDATE_DEPLOYMENT.md](./UPDATE_DEPLOYMENT.md)** - Update-Ablauf für Server-Deployments
 
 ### Features & Konfiguration
 
 - **[AUTHENTICATION_README.md](./AUTHENTICATION_README.md)** - Two-Factor Authentication (2FA) System
 - **[AUTH_SETUP_GUIDE.md](./AUTH_SETUP_GUIDE.md)** - Detaillierte 2FA Einrichtung
-- **[SMTP_SETUP.md](./SMTP_SETUP.md)** - E-Mail-Server für Password Reset
 - **[DOCUMENT_SOURCES_GUIDE.md](./DOCUMENT_SOURCES_GUIDE.md)** - Dokumentenverwaltung
 - **[SETUP_AUTOMATED_CHECKS.md](./SETUP_AUTOMATED_CHECKS.md)** - Automatische System-Checks
 

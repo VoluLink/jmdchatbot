@@ -29,6 +29,13 @@ async function isAdmin(request: NextRequest) {
 // POST - Register new user
 export async function POST(request: NextRequest) {
   try {
+    if (!(await isAdmin(request))) {
+      return NextResponse.json(
+        { error: "Selbstregistrierung ist deaktiviert. Bitte nutze einen Einladungslink." },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { email, password, name, role } = body;
 
@@ -48,13 +55,6 @@ export async function POST(request: NextRequest) {
 
     const normalizedEmail = normalizeEmail(email);
     const desiredRole = role === "admin" ? "admin" : "user";
-
-    if (desiredRole === "admin" && !(await isAdmin(request))) {
-      return NextResponse.json(
-        { error: "Admin access required to create admin users" },
-        { status: 403 }
-      );
-    }
 
     const existing = await query(
       "SELECT id FROM users WHERE email = $1",
