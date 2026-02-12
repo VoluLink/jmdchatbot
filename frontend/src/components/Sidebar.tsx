@@ -31,7 +31,7 @@ interface SidebarProps {
   sessions?: ChatSession[];
   currentSessionId?: string | null;
   onSelectSession?: (id: string) => void;
-  onNewSession?: () => void;
+  onNewSession?: () => void | Promise<unknown>;
   onDeleteSession?: (id: string) => void;
 }
 
@@ -69,7 +69,7 @@ export function Sidebar({
 
   const handleNewSession = () => {
     // Create new session
-    onNewSession?.();
+    void onNewSession?.();
     // Navigate to home page if not already there
     if (pathname !== "/") {
       router.push("/");
@@ -81,7 +81,9 @@ export function Sidebar({
       {/* Header - clickable to start a new chat */}
       <Link
         href="/"
-        onClick={() => onNewSession?.()}
+        onClick={() => {
+          void onNewSession?.();
+        }}
         className="flex h-16 items-center px-5 border-b border-white/10 hover:bg-white/5 transition-colors"
       >
         <span className="text-[13px] font-semibold text-slate-100 tracking-wide uppercase">

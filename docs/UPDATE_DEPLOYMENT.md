@@ -1,133 +1,74 @@
-# Update Deployment Guide (Tar-based)
+# Update Deployment Guide (Tar-based, One-line Commands)
 
-This guide updates an already running production server **from a deployment tar archive**.
+This guide updates the production server from a deployment tar while preserving server env/data files.
 
-It matches our current production setup:
-- Next.js app + Postgres via `docker-compose.prod.yml`
-- FastAPI backend via `rag-backend.service` (systemd)
-- Env files stored on server and preserved across updates
-
-## Server paths (current)
-
+Current server layout:
 - App root: `/home/projekt/jmdchatbot`
-- Frontend/Auth env: `/home/projekt/jmdchatbot/.env.prod`
+- Frontend env: `/home/projekt/jmdchatbot/.env.prod`
 - Backend env: `/home/projekt/jmdchatbot/deploy/backend.env`
 
-## 1) Build deployment tar locally
+## Local (PowerShell) - build and upload tar
 
-From your local repo root (`G:\rag-seminararbeit`):
+Run from `G:\rag-seminararbeit`:
 
 ```bash
+cd G:\rag-seminararbeit
+Remove-Item .\jmdchatbot-deploy.tar -ErrorAction SilentlyContinue
 tar --exclude='.git' --exclude='.venv' --exclude='frontend/node_modules' --exclude='*.tar' --exclude='.env' --exclude='.env.prod' --exclude='deploy/backend.env' --exclude='data' -cf jmdchatbot-deploy.tar .
-```
-
-Validate archive integrity before upload:
-
-```bash
-# Linux/macOS shell
-tar -tf jmdchatbot-deploy.tar > /dev/null
-
-# PowerShell
 tar -tf .\jmdchatbot-deploy.tar > $null
 ```
-
-## 2) Upload tar to server
-
-Recommended:
-
+## Place .tar in /home/projekt folder
 ```bash
-scp jmdchatbot-deploy.tar <user>@<server>:/tmp/jmdchatbot-deploy.tar
+scp .\jmdchatbot-deploy.tar projekt@116.203.166.18:/home/projekt/jmdchatbot-deploy.tar
+# or Use Winscp
 ```
 
-If `<server>` is not resolvable from your local machine, use the server IP.
-
-SFTP also works (same target path):
+## Server - extract and sync code
 
 ```bash
-put jmdchatbot-deploy.tar /tmp/jmdchatbot-deploy.tar
+cd /home/projekt/jmdchatbot
+APP=/home/projekt/jmdchatbot; TMP=/tmp/jmd-deploy-$(date +%Y%m%d%H%M%S); TAR=/home/projekt/jmdchatbot-deploy.tar; [ -f "$TAR" ] || TAR=/tmp/jmdchatbot-deploy.tar; mkdir -p "$TMP"; tar -xf "$TAR" -C "$TMP"; echo "USED_TAR=$TAR"
+SRC=$(dirname "$(find "$TMP" -maxdepth 5 -type f -name docker-compose.prod.yml 2>/dev/null | head -n1)"); [ -n "$SRC" ] && echo "$SRC" || { echo "docker-compose.prod.yml not found in tar"; exit 1; }
+sudo rsync -av --delete --itemize-changes --exclude='.env.prod' --exclude='deploy/backend.env' --exclude='data/' --exclude='.venv/' --exclude='__pycache__/' "$SRC"/ "$APP"/
 ```
 
-## 3) Prepare deployment on server
+## Server - rebuild/restart services
 
 ```bash
-ssh <user>@<server>
-APP=/home/projekt/jmdchatbot
-TMP=/tmp/jmd-deploy-$(date +%Y%m%d%H%M%S)
-
-mkdir -p "$TMP"
-tar -xf /tmp/jmdchatbot-deploy.tar -C "$TMP"
-```
-
-Locate extracted release root (must contain `docker-compose.prod.yml`):
-
-```bash
-SRC=$(dirname "$(find "$TMP" -maxdepth 4 -type f -name docker-compose.prod.yml 2>/dev/null | head -n1)")
-[ -n "$SRC" ] || { echo "docker-compose.prod.yml not found in archive"; exit 1; }
-```
-
-## 4) Sync release while preserving env/data
-
-Important: keep server-owned env files and runtime data.
-
-```bash
-sudo rsync -a --delete \
-  --exclude='.env.prod' \
-  --exclude='deploy/backend.env' \
-  --exclude='data/' \
-  --exclude='.venv/' \
-  --exclude='__pycache__/' \
-  "$SRC"/ "$APP"/
-```
-
-## 5) Redeploy services
-
-```bash
-cd "$APP"
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
-```
-
-Ensure backend venv exists, then restart backend:
-
-```bash
-if [ ! -x "$APP/.venv/bin/python" ]; then
-  python3 -m venv "$APP/.venv"
-fi
-
-. "$APP/.venv/bin/activate"
-pip install --upgrade pip
-pip install -r requirements.txt
-
+cd /home/projekt/jmdchatbot
+docker compose -f docker-compose.prod.yml --env-file .env.prod build --no-cache app
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate app
+if [ ! -x .venv/bin/python ]; then python3 -m venv .venv; fi
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 sudo systemctl restart rag-backend.service
 ```
 
-## 6) Verify deployment
+## Server - verify new code and runtime
 
 ```bash
+cd /home/projekt/jmdchatbot
+grep -n "Nicht indexierte Dateien indexieren" frontend/src/components/DocumentManager.tsx || echo "MARKER_MISSING_DOCMANAGER"
+grep -n "INVITE_FRONTEND_URL" frontend/src/app/api/auth/users/route.ts || echo "MARKER_MISSING_INVITE"
+grep -n "allow_origins=settings.resolved_cors_origins" src/app/main.py || echo "MARKER_MISSING_CORS"
 docker compose -f docker-compose.prod.yml --env-file .env.prod ps
 sudo systemctl status rag-backend.service --no-pager
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec app printenv NEXT_PUBLIC_API_BASE_URL
 curl -I http://127.0.0.1:3000
 curl -I http://127.0.0.1:8000/docs
+curl -i -X OPTIONS http://127.0.0.1:8000/query -H "Origin: http://116.203.166.18:3000" -H "Access-Control-Request-Method: POST" | grep -i access-control-allow-origin
 ```
 
-## 7) Cleanup
+## Cleanup
 
 ```bash
-rm -rf "$TMP" /tmp/jmdchatbot-deploy.tar
+rm -rf "$TMP" /tmp/jmdchatbot-deploy.tar /home/projekt/jmdchatbot-deploy.tar
 ```
 
-## Troubleshooting
+## Common errors
 
-- `tar: ... Cannot open`: tar not uploaded to expected path. Check `/tmp/jmdchatbot-deploy.tar`.
-- `open .../docker-compose.prod.yml: no such file`: sync failed or wrong source root. Re-run step 3 (`SRC`) and step 4.
-- `status=203/EXEC` for `rag-backend.service`: missing backend venv/python. Re-run step 5 venv block.
-- `POSTGRES_* variable is not set` warnings in compose: run compose commands with `--env-file .env.prod`.
-- `rsync code 23` with permissions on `.venv`/`__pycache__`: use `sudo rsync` and keep the excludes shown above.
-
-## Rollback
-
-Re-deploy the previous known-good tar with the same steps:
-
-1. Upload previous tar to `/tmp/jmdchatbot-deploy.tar`
-2. Repeat steps 3 to 6
-
-This restores code while keeping current `.env.prod`, `deploy/backend.env`, and `data/`.
+- `tar: ... Cannot open`: upload step failed or wrong path; verify `/home/projekt/jmdchatbot-deploy.tar` (or `/tmp/jmdchatbot-deploy.tar`).
+- `docker-compose.prod.yml not found in tar`: bad tar content; rebuild tar from repo root.
+- `rsync code 23`: run rsync with `sudo` and keep `.venv/` + `__pycache__/` excludes.
+- No `Access-Control-Allow-Origin` in preflight: old backend code still deployed or `CORS_ALLOWED_ORIGINS` not set correctly.

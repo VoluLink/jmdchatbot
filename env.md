@@ -35,3 +35,4 @@ Optional:
 CHUNK_SIZE=1024
 CHUNK_OVERLAP=200
 SOURCE_URLS=[]
+CORS_ALLOWED_ORIGINS=http://116.203.166.18:3000,https://jmdchatbot.kjf-regensburg.de

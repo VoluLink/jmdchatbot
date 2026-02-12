@@ -17,89 +17,155 @@ export interface ChatSession {
   updatedAt: number;
 }
 
-const STORAGE_KEY = "rag-chat-history";
+type SessionsResponse = {
+  sessions?: ChatSession[];
+};
 
-export function useChatHistory() {
+type SessionResponse = {
+  session?: ChatSession;
+};
+
+export function useChatHistory(userId: string | null, authReady: boolean) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load sessions from localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setSessions(parsed);
-        // Set current session to most recent
-        if (parsed.length > 0) {
-          setCurrentSessionId(parsed[0].id);
-        }
-      } catch (e) {
-        console.error("Failed to parse chat history", e);
-      }
+    if (!authReady) {
+      return;
     }
-    setIsLoaded(true);
-  }, []);
 
-  // Save sessions to localStorage whenever they change
-  useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+    if (!userId) {
+      setSessions([]);
+      setCurrentSessionId(null);
+      setIsLoaded(true);
+      return;
     }
-  }, [sessions, isLoaded]);
+
+    let cancelled = false;
+
+    const loadSessions = async () => {
+      setIsLoaded(false);
+      try {
+        const res = await fetch("/api/chat/sessions", { cache: "no-store" });
+        if (!res.ok) {
+          throw new Error(`Failed to load sessions (${res.status})`);
+        }
+
+        const data = (await res.json().catch(() => ({}))) as SessionsResponse;
+        const nextSessions = Array.isArray(data.sessions) ? data.sessions : [];
+
+        if (cancelled) return;
+
+        setSessions(nextSessions);
+        setCurrentSessionId((prev) => {
+          if (prev && nextSessions.some((session) => session.id === prev)) {
+            return prev;
+          }
+          return nextSessions[0]?.id ?? null;
+        });
+      } catch (e) {
+        console.error("Failed to load chat history", e);
+        if (cancelled) return;
+        setSessions([]);
+        setCurrentSessionId(null);
+      } finally {
+        if (!cancelled) {
+          setIsLoaded(true);
+        }
+      }
+    };
+
+    void loadSessions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, userId]);
 
   const currentSession = sessions.find((s) => s.id === currentSessionId) || null;
 
-  const createSession = useCallback(() => {
+  const createSession = useCallback(async () => {
+    if (!userId) {
+      return null;
+    }
+
     // Check if there's already an empty session
     const existingEmptySession = sessions.find((s) => s.messages.length === 0);
-
     if (existingEmptySession) {
-      // Reuse the existing empty session instead of creating a new one
       setCurrentSessionId(existingEmptySession.id);
       return existingEmptySession;
     }
 
-    // No empty session found, create a new one
-    const newSession: ChatSession = {
-      id: Date.now().toString(),
-      title: "Neue Unterhaltung",
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-    setSessions((prev) => [newSession, ...prev]);
-    setCurrentSessionId(newSession.id);
-    return newSession;
-  }, [sessions]);
+    try {
+      const res = await fetch("/api/chat/sessions", {
+        method: "POST",
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to create session (${res.status})`);
+      }
+
+      const data = (await res.json().catch(() => ({}))) as SessionResponse;
+      if (!data.session) {
+        throw new Error("Invalid create-session response");
+      }
+
+      setSessions((prev) => [data.session as ChatSession, ...prev]);
+      setCurrentSessionId(data.session.id);
+      return data.session as ChatSession;
+    } catch (e) {
+      console.error("Failed to create chat session", e);
+      return null;
+    }
+  }, [sessions, userId]);
 
   const updateSession = useCallback(
     (sessionId: string, messages: ChatMessage[]) => {
-      setSessions((prev) =>
-        prev.map((s) => {
-          if (s.id === sessionId) {
-            // Generate title from first user message
-            const firstUserMsg = messages.find((m) => m.role === "user");
-            const title = firstUserMsg
-              ? firstUserMsg.content.slice(0, 40) + (firstUserMsg.content.length > 40 ? "..." : "")
-              : "Neue Unterhaltung";
-            return { ...s, messages, title, updatedAt: Date.now() };
-          }
-          return s;
-        })
-      );
+      const firstUserMsg = messages.find((m) => m.role === "user");
+      const title = firstUserMsg
+        ? firstUserMsg.content.slice(0, 40) + (firstUserMsg.content.length > 40 ? "..." : "")
+        : "Neue Unterhaltung";
+      const updatedAt = Date.now();
+
+      setSessions((prev) => {
+        const existing = prev.find((session) => session.id === sessionId);
+        if (!existing) {
+          return prev;
+        }
+        const updatedSession: ChatSession = {
+          ...existing,
+          title,
+          messages,
+          updatedAt,
+        };
+        return [updatedSession, ...prev.filter((session) => session.id !== sessionId)];
+      });
+
+      void fetch(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages }),
+      }).catch((error) => {
+        console.error("Failed to persist chat session update:", error);
+      });
     },
     []
   );
 
   const deleteSession = useCallback(
     (sessionId: string) => {
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      const remaining = sessions.filter((s) => s.id !== sessionId);
+      setSessions(remaining);
+
       if (currentSessionId === sessionId) {
-        const remaining = sessions.filter((s) => s.id !== sessionId);
         setCurrentSessionId(remaining.length > 0 ? remaining[0].id : null);
       }
+
+      void fetch(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, {
+        method: "DELETE",
+      }).catch((error) => {
+        console.error("Failed to delete chat session:", error);
+      });
     },
     [currentSessionId, sessions]
   );

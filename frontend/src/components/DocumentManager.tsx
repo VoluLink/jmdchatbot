@@ -24,6 +24,7 @@ type TreeNode = {
   name: string;
   path: string;
   type: "folder" | "file";
+  indexed?: boolean;
   children?: TreeNode[];
 };
 
@@ -32,6 +33,7 @@ type ContextMenuType = {
   y: number;
   node: TreeNode;
   type: "folder" | "file";
+  unindexedPaths: string[];
 };
 
 type ModalType =
@@ -43,6 +45,7 @@ type ModalType =
 
 async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
+    cache: init?.cache ?? "no-store",
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -67,29 +70,79 @@ function flattenFolders(node: TreeNode): string[] {
   return out;
 }
 
+function collectUnindexedPaths(node: TreeNode): string[] {
+  if (node.type === "file") {
+    return node.indexed ? [] : [node.path];
+  }
+
+  const out: string[] = [];
+  for (const child of node.children ?? []) {
+    out.push(...collectUnindexedPaths(child));
+  }
+  return out;
+}
+
+function collectIndexedPathSet(node: TreeNode): Set<string> {
+  const indexed = new Set<string>();
+
+  const walk = (n: TreeNode) => {
+    if (n.type === "file") {
+      if (n.indexed) indexed.add(n.path);
+      return;
+    }
+    for (const child of n.children ?? []) {
+      walk(child);
+    }
+  };
+
+  walk(node);
+  return indexed;
+}
+
 export function DocumentManager() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set([""]));
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuType | null>(null);
   const [modal, setModal] = useState<ModalType>(null);
   const [busyPath, setBusyPath] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const [indexingTargets, setIndexingTargets] = useState<Set<string>>(new Set());
+  const [indexingActivePath, setIndexingActivePath] = useState<string | null>(null);
+  const [globalIndexing, setGlobalIndexing] = useState(false);
+  const [globalIndexResult, setGlobalIndexResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<TreeNode | null> => {
     setError(null);
     try {
       const data = await apiJson<{ tree: TreeNode }>("/api/document-management/tree");
       setTree(data.tree);
+      return data.tree;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return null;
     }
   }, []);
 
   useEffect(() => {
-    refresh();
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const onSourcesUpdated = () => {
+      void refresh();
+    };
+
+    window.addEventListener("sources-updated", onSourcesUpdated);
+    return () => {
+      window.removeEventListener("sources-updated", onSourcesUpdated);
+    };
   }, [refresh]);
 
   useEffect(() => {
@@ -122,11 +175,13 @@ export function DocumentManager() {
   const handleContextMenu = (e: React.MouseEvent, node: TreeNode) => {
     e.preventDefault();
     e.stopPropagation();
+    const unindexedPaths = collectUnindexedPaths(node);
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
       node,
       type: node.type,
+      unindexedPaths,
     });
   };
 
@@ -212,6 +267,166 @@ export function DocumentManager() {
     }
   };
 
+  const waitForIndexJob = async (
+    onTick?: (status: { running: boolean }, latestTree: TreeNode | null) => void,
+    timeoutMs = 30 * 60 * 1000
+  ) => {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const statusRes = await fetch("/api/jobs/index-files", {
+        method: "GET",
+        cache: "no-store",
+      });
+      const status = (await statusRes.json().catch(() => ({}))) as {
+        running?: boolean;
+        success?: boolean;
+        message?: string;
+      };
+      if (!status.running) {
+        return status as { success?: boolean; message?: string };
+      }
+
+      const latestTree = await refresh();
+      onTick?.({ running: true }, latestTree);
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+    }
+
+    return null;
+  };
+
+  const handleIndexUnindexed = async (sourcePath: string, targetPaths: string[]) => {
+    if (!targetPaths.length) {
+      setInfo("Keine nicht indexierten Dateien in dieser Auswahl.");
+      setTimeout(() => setInfo(null), 3000);
+      return;
+    }
+
+    setBusyPath(sourcePath);
+    setError(null);
+    const totalTargets = targetPaths.length;
+    setIndexingTargets(new Set(targetPaths));
+    setIndexingActivePath(targetPaths[0] ?? null);
+    setInfo(`Indexierung gestartet... (0/${totalTargets})`);
+
+    try {
+      const res = await fetch("/api/jobs/index-files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: false, targetPaths }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok && res.status !== 409) {
+        throw new Error(data.error || data.message || "Indexierung konnte nicht gestartet werden");
+      }
+
+      const finalStatus = await waitForIndexJob((_status, latestTree) => {
+        if (!latestTree) return;
+        const indexedPaths = collectIndexedPathSet(latestTree);
+        const pending = targetPaths.filter((relPath) => !indexedPaths.has(relPath));
+        const done = totalTargets - pending.length;
+        setIndexingActivePath(pending[0] ?? null);
+        setInfo(`Indexierung laeuft... (${done}/${totalTargets})`);
+      });
+      if (!finalStatus) {
+        setInfo("Indexierung laeuft weiterhin im Hintergrund.");
+        return;
+      }
+
+      if (finalStatus.success) {
+        const latestTree = await refresh();
+        const indexedPaths = latestTree ? collectIndexedPathSet(latestTree) : new Set<string>();
+        const done = targetPaths.reduce((acc, relPath) => {
+          return indexedPaths.has(relPath) ? acc + 1 : acc;
+        }, 0);
+        setIndexingActivePath(null);
+        setIndexingTargets(new Set());
+        setInfo(`Indexierung abgeschlossen. (${done}/${totalTargets})`);
+      } else {
+        throw new Error(finalStatus.message || "Indexierung fehlgeschlagen.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setIndexingActivePath(null);
+      setIndexingTargets(new Set());
+    } finally {
+      setBusyPath(null);
+      setTimeout(() => setInfo(null), 4000);
+    }
+  };
+
+  const handleIndexAll = async () => {
+    setGlobalIndexResult(null);
+
+    const latestTree = tree ?? (await refresh());
+    if (!latestTree) return;
+
+    const targetPaths = collectUnindexedPaths(latestTree);
+    if (!targetPaths.length) {
+      setGlobalIndexResult({ success: true, message: "Alles bereits indexiert" });
+      setTimeout(() => setGlobalIndexResult(null), 4000);
+      return;
+    }
+
+    setGlobalIndexing(true);
+    setError(null);
+    setIndexingTargets(new Set(targetPaths));
+    setIndexingActivePath(targetPaths[0] ?? null);
+
+    const totalTargets = targetPaths.length;
+    setInfo(`Indexierung gestartet... (0/${totalTargets})`);
+
+    try {
+      const res = await fetch("/api/jobs/index-files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force: false }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok && res.status !== 409) {
+        throw new Error(data.error || data.message || "Indexierung konnte nicht gestartet werden");
+      }
+
+      const finalStatus = await waitForIndexJob((_status, polledTree) => {
+        if (!polledTree) return;
+        const indexedPaths = collectIndexedPathSet(polledTree);
+        const pending = targetPaths.filter((relPath) => !indexedPaths.has(relPath));
+        const done = totalTargets - pending.length;
+        setIndexingActivePath(pending[0] ?? null);
+        setInfo(`Indexierung laeuft... (${done}/${totalTargets})`);
+      });
+
+      if (!finalStatus) {
+        setGlobalIndexResult({ success: true, message: "Laeuft im Hintergrund" });
+        setInfo("Indexierung laeuft weiterhin im Hintergrund.");
+        return;
+      }
+
+      if (finalStatus.success) {
+        const finishedTree = await refresh();
+        const indexedPaths = finishedTree ? collectIndexedPathSet(finishedTree) : new Set<string>();
+        const done = targetPaths.reduce((acc, relPath) => {
+          return indexedPaths.has(relPath) ? acc + 1 : acc;
+        }, 0);
+        setGlobalIndexResult({ success: true, message: "Indexierung abgeschlossen" });
+        setInfo(`Indexierung abgeschlossen. (${done}/${totalTargets})`);
+      } else {
+        throw new Error(finalStatus.message || "Indexierung fehlgeschlagen.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setGlobalIndexResult({ success: false, message: "Indexierung fehlgeschlagen" });
+    } finally {
+      setGlobalIndexing(false);
+      setIndexingActivePath(null);
+      setIndexingTargets(new Set());
+      setTimeout(() => setGlobalIndexResult(null), 4000);
+      setTimeout(() => setInfo(null), 4000);
+    }
+  };
+
   const handleDragStart = (e: React.DragEvent, node: TreeNode) => {
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("application/json", JSON.stringify(node));
@@ -292,6 +507,12 @@ export function DocumentManager() {
           </div>
         )}
 
+        {info && (
+          <div className="px-5 py-3 bg-[#0077DD]/10 border-b border-[#0077DD]/20 text-sm text-[#99CCFF]">
+            {info}
+          </div>
+        )}
+
         <div className="px-3 py-3 max-h-[600px] overflow-y-auto">
           <TreeItem
             node={tree}
@@ -299,6 +520,8 @@ export function DocumentManager() {
             open={open}
             busyPath={busyPath}
             dragOver={dragOver}
+            indexingTargets={indexingTargets}
+            indexingActivePath={indexingActivePath}
             isAdmin={isAdmin}
             onToggle={toggleFolder}
             onContextMenu={handleContextMenu}
@@ -314,14 +537,45 @@ export function DocumentManager() {
             {folders.length - 1} Ordner • {tree.children?.filter((c) => c.type === "file").length || 0}{" "}
             Dateien (root)
           </span>
-          <IndexFilesButton compact />
+          {isAdmin && (
+            <div className="relative">
+              <button
+                onClick={handleIndexAll}
+                disabled={globalIndexing}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0077DD]/20 border border-[#0077DD]/30 text-xs font-semibold text-[#0077DD] hover:bg-[#0077DD]/30 disabled:opacity-50 transition-all"
+                title="Dateien indexieren"
+              >
+                {globalIndexing ? (
+                  <div className="w-3 h-3 border-2 border-[#0077DD]/30 border-t-[#0077DD] rounded-full animate-spin" />
+                ) : (
+                  <RefreshCw className="w-3 h-3" />
+                )}
+                <span>Index</span>
+              </button>
+
+              {globalIndexResult && (
+                <div
+                  className={`absolute top-full right-0 mt-2 px-2 py-1 rounded text-[10px] whitespace-nowrap shadow-xl z-10 ${
+                    globalIndexResult.success
+                      ? "bg-[#0077DD]/90 text-white"
+                      : "bg-slate-500/90 text-white"
+                  }`}
+                >
+                  {globalIndexResult.message}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {contextMenu && isAdmin && (
         <ContextMenu
           menu={contextMenu}
-          onClose={() => setContextMenu(null)}
+          onIndexUnindexed={() => {
+            handleIndexUnindexed(contextMenu.node.path, contextMenu.unindexedPaths);
+            setContextMenu(null);
+          }}
           onCreateSubfolder={() => {
             setModal({ type: "create", parentPath: contextMenu.node.path });
             setContextMenu(null);
@@ -399,6 +653,8 @@ function TreeItem({
   open,
   busyPath,
   dragOver,
+  indexingTargets,
+  indexingActivePath,
   isAdmin,
   onToggle,
   onContextMenu,
@@ -412,6 +668,8 @@ function TreeItem({
   open: Set<string>;
   busyPath: string | null;
   dragOver: string | null;
+  indexingTargets: Set<string>;
+  indexingActivePath: string | null;
   isAdmin: boolean;
   onToggle: (path: string) => void;
   onContextMenu: (e: React.MouseEvent, node: TreeNode) => void;
@@ -468,6 +726,8 @@ function TreeItem({
               open={open}
               busyPath={busyPath}
               dragOver={dragOver}
+              indexingTargets={indexingTargets}
+              indexingActivePath={indexingActivePath}
               isAdmin={isAdmin}
               onToggle={onToggle}
               onContextMenu={onContextMenu}
@@ -482,6 +742,10 @@ function TreeItem({
   }
 
   const href = `/documents/${encodePathSegments(node.path)}`;
+  const isIndexingActive = indexingActivePath === node.path;
+  const isIndexingQueued =
+    !node.indexed && !isIndexingActive && indexingTargets.has(node.path);
+
   return (
     <div
       className={`group flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-all ${
@@ -492,14 +756,37 @@ function TreeItem({
       onDragStart={isAdmin ? (e) => onDragStart(e, node) : undefined}
       onContextMenu={isAdmin ? (e) => onContextMenu(e, node) : undefined}
     >
-      <FileText className="w-4 h-4 text-slate-400" />
+      <FileText className={`w-4 h-4 ${node.indexed ? "text-slate-400" : "text-slate-600"}`} />
       <Link
         href={href}
-        className="flex-1 text-sm text-slate-200 hover:text-[#0077DD] transition-colors truncate"
+        className={`flex-1 text-sm transition-colors truncate ${
+          node.indexed
+            ? "text-slate-200 hover:text-[#0077DD]"
+            : "text-slate-500 hover:text-slate-300"
+        }`}
       >
         {node.name}
       </Link>
-      {isBusy && (
+      <span
+        className={`text-[10px] px-1.5 py-0.5 rounded border ${
+          isIndexingActive
+            ? "border-[#0077DD]/60 text-[#99CCFF]"
+            : isIndexingQueued
+            ? "border-slate-600 text-slate-400"
+            : node.indexed
+            ? "border-emerald-700/60 text-emerald-300/90"
+            : "border-slate-600 text-slate-500"
+        }`}
+      >
+        {isIndexingActive
+          ? "indexiert..."
+          : isIndexingQueued
+          ? "wartet"
+          : node.indexed
+          ? "indexiert"
+          : "nicht indexiert"}
+      </span>
+      {(isBusy || isIndexingActive) && (
         <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
       )}
     </div>
@@ -508,14 +795,14 @@ function TreeItem({
 
 function ContextMenu({
   menu,
-  onClose,
+  onIndexUnindexed,
   onCreateSubfolder,
   onRename,
   onDelete,
   onMove,
 }: {
   menu: ContextMenuType;
-  onClose: () => void;
+  onIndexUnindexed: () => void;
   onCreateSubfolder: () => void;
   onRename: () => void;
   onDelete: () => void;
@@ -527,6 +814,19 @@ function ContextMenu({
       style={{ left: menu.x, top: menu.y }}
       onClick={(e) => e.stopPropagation()}
     >
+      {menu.unindexedPaths.length > 0 && (
+        <>
+          <button
+            onClick={onIndexUnindexed}
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-[#99CCFF] hover:bg-[#0077DD]/20 transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Nicht indexierte Dateien indexieren ({menu.unindexedPaths.length})
+          </button>
+          <div className="h-px bg-white/10 my-1" />
+        </>
+      )}
+
       {menu.type === "folder" && menu.node.path && (
         <button
           onClick={onCreateSubfolder}
@@ -814,71 +1114,3 @@ function ModalBackdrop({
   );
 }
 
-function IndexFilesButton({ compact = false }: { compact?: boolean }) {
-  const [indexing, setIndexing] = useState(false);
-  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
-
-  const handleIndex = async () => {
-    setIndexing(true);
-    setResult(null);
-
-    try {
-      const res = await fetch("/api/jobs/index-files", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force: false }),
-      });
-      const data = await res.json();
-
-      setResult({
-        success: data.success,
-        message: data.success
-          ? "✅ Indexiert!"
-          : `❌ Fehler`,
-      });
-
-      setTimeout(() => setResult(null), 3000);
-    } catch (err) {
-      setResult({
-        success: false,
-        message: "❌ Fehler",
-      });
-    } finally {
-      setIndexing(false);
-    }
-  };
-
-  if (compact) {
-    return (
-      <div className="relative">
-        <button
-          onClick={handleIndex}
-          disabled={indexing}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0077DD]/20 border border-[#0077DD]/30 text-xs font-semibold text-[#0077DD] hover:bg-[#0077DD]/30 disabled:opacity-50 transition-all"
-          title="Dateien indexieren"
-        >
-          {indexing ? (
-            <div className="w-3 h-3 border-2 border-[#0077DD]/30 border-t-[#0077DD] rounded-full animate-spin" />
-          ) : (
-            <RefreshCw className="w-3 h-3" />
-          )}
-          <span>Index</span>
-        </button>
-
-        {result && (
-          <div
-            className={`absolute top-full right-0 mt-2 px-2 py-1 rounded text-[10px] whitespace-nowrap shadow-xl z-10 ${
-              result.success
-                ? "bg-[#0077DD]/90 text-white"
-                : "bg-slate-500/90 text-white"
-            }`}
-          >
-            {result.message}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return null;
-}

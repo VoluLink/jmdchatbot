@@ -14,6 +14,7 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 type UrlSource = {
   id: string;
@@ -36,11 +37,20 @@ type ModalType =
   | null;
 
 export function UrlSourcesManager() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [sources, setSources] = useState<UrlSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalType>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [applyingAll, setApplyingAll] = useState(false);
+  const [applyAllResult, setApplyAllResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+
+  const pendingCount = sources.filter((source) => source.pendingUpdate).length;
 
   const fetchSources = useCallback(async () => {
     try {
@@ -157,6 +167,40 @@ export function UrlSourcesManager() {
     }
   };
 
+  const handleApplyAllUpdates = async () => {
+    setApplyAllResult(null);
+
+    if (pendingCount === 0) {
+      setApplyAllResult({ success: true, message: "Alles bereits indexiert" });
+      setTimeout(() => setApplyAllResult(null), 4000);
+      return;
+    }
+
+    setApplyingAll(true);
+    try {
+      const res = await fetch("/api/sources/urls/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applyAll: true }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to apply updates");
+      }
+      await fetchSources();
+      setApplyAllResult({
+        success: true,
+        message: `${pendingCount} URL-Quelle(n) indexiert`,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to apply updates");
+      setApplyAllResult({ success: false, message: "Indexierung fehlgeschlagen" });
+    } finally {
+      setApplyingAll(false);
+      setTimeout(() => setApplyAllResult(null), 4000);
+    }
+  };
+
   if (loading) {
     return (
       <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-slate-200">
@@ -175,16 +219,20 @@ export function UrlSourcesManager() {
           <div>
             <h3 className="text-sm font-semibold text-white">URL-Quellen</h3>
             <p className="text-xs text-slate-400 mt-1">
-              Werden täglich automatisch geprüft • Änderungen erfordern manuelle Bestätigung
+              {isAdmin
+                ? "Werden täglich automatisch geprüft • Änderungen erfordern manuelle Bestätigung"
+                : "Nur-Lesen Modus"}
             </p>
           </div>
-          <button
-            onClick={() => setModal({ type: "add" })}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0077DD]/20 border border-[#0077DD]/30 text-xs font-semibold text-[#0077DD] hover:bg-[#0077DD]/30 hover:border-[#0077DD]/40 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            URL hinzufügen
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setModal({ type: "add" })}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[#0077DD]/20 border border-[#0077DD]/30 text-xs font-semibold text-[#0077DD] hover:bg-[#0077DD]/30 hover:border-[#0077DD]/40 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              URL hinzufügen
+            </button>
+          )}
         </div>
 
         {error && (
@@ -276,50 +324,52 @@ export function UrlSourcesManager() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {source.pendingUpdate && (
+                  {isAdmin && (
+                    <div className="flex items-center gap-2">
+                      {source.pendingUpdate && (
+                        <button
+                          onClick={() => handleApplyUpdate(source.id)}
+                          disabled={busyId === source.id}
+                          className="px-3 py-1.5 rounded-lg border border-[#66B3FF]/30 bg-[#66B3FF]/10 text-[#66B3FF] hover:bg-[#66B3FF]/20 disabled:opacity-50 transition-all text-xs font-semibold"
+                          title="Index aktualisieren"
+                        >
+                          <RefreshCw className="w-3 h-3 inline mr-1" />
+                          Update Index
+                        </button>
+                      )}
+
                       <button
-                        onClick={() => handleApplyUpdate(source.id)}
+                        onClick={() => handleToggle(source.id, !source.enabled)}
                         disabled={busyId === source.id}
-                        className="px-3 py-1.5 rounded-lg border border-[#66B3FF]/30 bg-[#66B3FF]/10 text-[#66B3FF] hover:bg-[#66B3FF]/20 disabled:opacity-50 transition-all text-xs font-semibold"
-                        title="Index aktualisieren"
+                        className={`p-2 rounded-lg border transition-all ${
+                          source.enabled
+                            ? "border-[#0077DD]/30 bg-[#0077DD]/10 text-[#0077DD] hover:bg-[#0077DD]/20"
+                            : "border-slate-500/30 bg-slate-500/10 text-slate-400 hover:bg-slate-500/20"
+                        } disabled:opacity-50`}
+                        title={source.enabled ? "Deaktivieren" : "Aktivieren"}
                       >
-                        <RefreshCw className="w-3 h-3 inline mr-1" />
-                        Update Index
+                        {source.enabled ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
                       </button>
-                    )}
 
-                    <button
-                      onClick={() => handleToggle(source.id, !source.enabled)}
-                      disabled={busyId === source.id}
-                      className={`p-2 rounded-lg border transition-all ${
-                        source.enabled
-                          ? "border-[#0077DD]/30 bg-[#0077DD]/10 text-[#0077DD] hover:bg-[#0077DD]/20"
-                          : "border-slate-500/30 bg-slate-500/10 text-slate-400 hover:bg-slate-500/20"
-                      } disabled:opacity-50`}
-                      title={source.enabled ? "Deaktivieren" : "Aktivieren"}
-                    >
-                      {source.enabled ? <Power className="w-4 h-4" /> : <PowerOff className="w-4 h-4" />}
-                    </button>
+                      <button
+                        onClick={() => setModal({ type: "edit", source })}
+                        disabled={busyId === source.id}
+                        className="p-2 rounded-lg border border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 disabled:opacity-50 transition-all"
+                        title="Bearbeiten"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
 
-                    <button
-                      onClick={() => setModal({ type: "edit", source })}
-                      disabled={busyId === source.id}
-                      className="p-2 rounded-lg border border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 disabled:opacity-50 transition-all"
-                      title="Bearbeiten"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-
-                    <button
-                      onClick={() => setModal({ type: "delete", source })}
-                      disabled={busyId === source.id}
-                      className="p-2 rounded-lg border border-red-300/40 bg-red-500/10 text-red-200 hover:bg-red-500/20 disabled:opacity-50 transition-all"
-                      title="Löschen"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                      <button
+                        onClick={() => setModal({ type: "delete", source })}
+                        disabled={busyId === source.id}
+                        className="p-2 rounded-lg border border-red-300/40 bg-red-500/10 text-red-200 hover:bg-red-500/20 disabled:opacity-50 transition-all"
+                        title="Löschen"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))
@@ -328,13 +378,44 @@ export function UrlSourcesManager() {
 
         <div className="px-5 py-3 border-t border-white/10 flex items-center justify-between">
           <span className="text-xs text-slate-400">
-            {sources.length} URL-Quelle(n) • Quellen mit ⚠️ Badge haben Änderungen
+            {sources.length} URL-Quelle(n){isAdmin ? " • Quellen mit ⚠️ Badge haben Änderungen" : ""}
           </span>
-          <CheckUrlsButton />
+          {isAdmin && (
+            <div className="flex items-center gap-2">
+              <CheckUrlsButton onComplete={fetchSources} />
+              <div className="relative">
+                <button
+                  onClick={handleApplyAllUpdates}
+                  disabled={applyingAll}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0077DD]/20 border border-[#0077DD]/30 text-xs font-semibold text-[#0077DD] hover:bg-[#0077DD]/30 disabled:opacity-50 transition-all"
+                  title="Alle ausstehenden URL-Änderungen indexieren"
+                >
+                  {applyingAll ? (
+                    <div className="w-3 h-3 border-2 border-[#0077DD]/30 border-t-[#0077DD] rounded-full animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3 h-3" />
+                  )}
+                  <span>Index{pendingCount > 0 ? ` (${pendingCount})` : ""}</span>
+                </button>
+
+                {applyAllResult && (
+                  <div
+                    className={`absolute top-full right-0 mt-2 px-2 py-1 rounded text-[10px] whitespace-nowrap shadow-xl z-10 ${
+                      applyAllResult.success
+                        ? "bg-[#0077DD]/90 text-white"
+                        : "bg-slate-500/90 text-white"
+                    }`}
+                  >
+                    {applyAllResult.message}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {modal?.type === "add" && (
+      {isAdmin && modal?.type === "add" && (
         <UrlSourceModal
           title="URL-Quelle hinzufügen"
           onConfirm={handleAdd}
@@ -342,7 +423,7 @@ export function UrlSourcesManager() {
         />
       )}
 
-      {modal?.type === "edit" && (
+      {isAdmin && modal?.type === "edit" && (
         <UrlSourceModal
           title="URL-Quelle bearbeiten"
           initialUrl={modal.source.url}
@@ -353,7 +434,7 @@ export function UrlSourcesManager() {
         />
       )}
 
-      {modal?.type === "delete" && (
+      {isAdmin && modal?.type === "delete" && (
         <DeleteUrlModal
           source={modal.source}
           onConfirm={() => handleDelete(modal.source.id)}
@@ -508,7 +589,7 @@ function DeleteUrlModal({
   );
 }
 
-function CheckUrlsButton() {
+function CheckUrlsButton({ onComplete }: { onComplete?: () => void | Promise<void> }) {
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -529,9 +610,15 @@ function CheckUrlsButton() {
           : `❌ ${data.error || "Fehlgeschlagen"}`,
       });
 
-      // Reload page after successful check to show updated sources
+      // Refresh sources after successful check to show updated status.
       if (data.success) {
-        setTimeout(() => window.location.reload(), 2000);
+        setTimeout(() => {
+          if (onComplete) {
+            void onComplete();
+          } else {
+            window.location.reload();
+          }
+        }, 1200);
       }
     } catch (err) {
       setResult({

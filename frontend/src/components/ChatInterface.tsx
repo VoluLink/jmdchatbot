@@ -30,7 +30,7 @@ const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(
 );
 
 export function ChatInterface() {
-  const { currentSession, currentSessionId, updateSession, createSession, isLoaded } = useChatHistoryContext();
+  const { currentSession, currentSessionId, updateSession, createSession } = useChatHistoryContext();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -71,11 +71,11 @@ export function ChatInterface() {
   }, [currentSession, currentSessionId]);
 
   // Save messages to session whenever they change
-  const saveMessages = useCallback((newMessages: Message[]) => {
-    if (currentSessionId && newMessages.length > 0) {
-      updateSession(currentSessionId, newMessages);
+  const saveMessages = useCallback((sessionId: string, newMessages: Message[]) => {
+    if (newMessages.length > 0) {
+      updateSession(sessionId, newMessages);
     }
-  }, [currentSessionId, updateSession]);
+  }, [updateSession]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -91,8 +91,11 @@ export function ChatInterface() {
     // Create a new session if none exists
     let sessionId = currentSessionId;
     if (!sessionId) {
-      const newSession = createSession();
+      const newSession = await createSession();
       sessionId = newSession?.id || null;
+      if (!sessionId) {
+        return;
+      }
     }
 
     const userMessage = input.trim();
@@ -104,7 +107,7 @@ export function ChatInterface() {
     const userMsg: Message = { role: "user", content: userMessage, id: Date.now().toString() };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
-    if (sessionId) saveMessages(newMessages);
+    if (sessionId) saveMessages(sessionId, newMessages);
     setIsLoading(true);
 
     try {
@@ -135,7 +138,7 @@ export function ChatInterface() {
       };
       const updatedMessages = [...newMessages, assistantMsg];
       setMessages(updatedMessages);
-      if (sessionId) saveMessages(updatedMessages);
+      if (sessionId) saveMessages(sessionId, updatedMessages);
     } catch (error) {
       console.error("Chat request failed", error);
       const errorMsg: Message = { 
@@ -145,7 +148,7 @@ export function ChatInterface() {
       };
       const updatedMessages = [...newMessages, errorMsg];
       setMessages(updatedMessages);
-      if (sessionId) saveMessages(updatedMessages);
+      if (sessionId) saveMessages(sessionId, updatedMessages);
     } finally {
       setIsLoading(false);
     }
@@ -160,7 +163,7 @@ export function ChatInterface() {
 
   const handleClear = () => {
     setMessages([]);
-    createSession(); // Start a new session
+    void createSession(); // Start a new session
   };
 
   return (

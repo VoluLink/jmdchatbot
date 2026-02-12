@@ -66,6 +66,10 @@ export default function DocumentsPage() {
             <div className="grid grid-cols-1 gap-6">
               <DocumentManager />
             </div>
+
+            <div className="grid grid-cols-1 gap-6">
+              <UrlSourcesManager />
+            </div>
           </>
         )}
       </div>

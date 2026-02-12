@@ -109,6 +109,10 @@ export function FileUploader({
       if (onUploadComplete) {
         onUploadComplete();
       }
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("sources-updated"));
+      }
     } catch (err) {
       setStatus("error");
       setResults([
@@ -293,8 +297,51 @@ function IndexFilesButton({ onComplete }: { onComplete?: () => void }) {
   const [indexing, setIndexing] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  const pollStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/jobs/index-files", { method: "GET" });
+      const data = await res.json();
+
+      if (data.running) {
+        return;
+      }
+
+      setIndexing(false);
+      const success = !!data.success;
+      setResult({
+        success,
+        message: success
+          ? "Indexierung abgeschlossen. Suche ist jetzt aktualisiert."
+          : data.message || "Indexierung fehlgeschlagen.",
+      });
+
+      if (success && onComplete) {
+        setTimeout(onComplete, 2000);
+      }
+
+      if (success && typeof window !== "undefined") {
+        window.dispatchEvent(new Event("sources-updated"));
+      }
+    } catch {
+      setIndexing(false);
+      setResult({
+        success: false,
+        message: "Status konnte nicht abgefragt werden.",
+      });
+    }
+  }, [onComplete]);
+
+  useEffect(() => {
+    if (!indexing) return;
+
+    const timer = setInterval(() => {
+      pollStatus();
+    }, 2500);
+
+    return () => clearInterval(timer);
+  }, [indexing, pollStatus]);
+
   const handleIndex = async () => {
-    setIndexing(true);
     setResult(null);
 
     try {
@@ -305,23 +352,31 @@ function IndexFilesButton({ onComplete }: { onComplete?: () => void }) {
       });
       const data = await res.json();
 
-      setResult({
-        success: data.success,
-        message: data.success
-          ? "✅ Dateien erfolgreich indexiert!"
-          : `❌ ${data.error || "Indexierung fehlgeschlagen"}`,
-      });
-
-      if (data.success && onComplete) {
-        setTimeout(onComplete, 3000);
+      if (res.status === 409 && data.running) {
+        setIndexing(true);
+        setResult({
+          success: true,
+          message: "Indexierung laeuft bereits im Hintergrund.",
+        });
+        return;
       }
-    } catch (err) {
+
+      if (!res.ok) {
+        throw new Error(data.error || data.message || "Indexierung fehlgeschlagen");
+      }
+
+      setIndexing(true);
+      setResult({
+        success: true,
+        message:
+          "Indexierung gestartet. Das kann je nach Anzahl/Groesse der Dateien etwas dauern.",
+      });
+    } catch {
+      setIndexing(false);
       setResult({
         success: false,
-        message: "❌ Fehler beim Indexieren",
+        message: "Fehler beim Starten der Indexierung.",
       });
-    } finally {
-      setIndexing(false);
     }
   };
 
@@ -329,7 +384,7 @@ function IndexFilesButton({ onComplete }: { onComplete?: () => void }) {
     <div className="space-y-3">
       <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
         <p className="text-sm text-emerald-200 mb-3">
-          ✅ Upload erfolgreich! Dateien jetzt indexieren?
+          Upload erfolgreich. Jetzt indexieren, damit die Suche neue Dateien findet.
         </p>
         <button
           onClick={handleIndex}
@@ -339,7 +394,7 @@ function IndexFilesButton({ onComplete }: { onComplete?: () => void }) {
           {indexing ? (
             <>
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span>Indexierung läuft…</span>
+              <span>Indexierung laeuft...</span>
             </>
           ) : (
             <>
@@ -364,4 +419,3 @@ function IndexFilesButton({ onComplete }: { onComplete?: () => void }) {
     </div>
   );
 }
-

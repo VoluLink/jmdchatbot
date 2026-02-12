@@ -3,9 +3,6 @@
 import { useEffect, useState } from "react";
 import {
   FileText,
-  CheckCircle2,
-  XCircle,
-  Clock,
   User,
   Calendar,
   Download,
@@ -54,26 +51,6 @@ export function DocumentRequestsManager() {
     fetchRequests();
   }, []);
 
-  const updateStatus = async (requestId: string, status: "approved" | "rejected") => {
-    try {
-      const res = await fetch("/api/document-requests", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId, status }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to update status");
-      }
-
-      await fetchRequests();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    }
-  };
-
   const deleteRequest = async (requestId: string) => {
     try {
       const res = await fetch(`/api/document-requests?id=${requestId}`, {
@@ -102,32 +79,6 @@ export function DocumentRequestsManager() {
     });
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "approved":
-        return <CheckCircle2 className="w-4 h-4 text-[#0077DD]" />;
-      case "rejected":
-        return <XCircle className="w-4 h-4 text-slate-400" />;
-      default:
-        return <Clock className="w-4 h-4 text-[#66B3FF]" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "approved":
-        return "bg-[#0077DD]/20 text-[#0077DD] border-[#0077DD]/30";
-      case "rejected":
-        return "bg-slate-500/20 text-slate-300 border-slate-500/30";
-      default:
-        return "bg-[#66B3FF]/20 text-[#66B3FF] border-[#66B3FF]/30";
-    }
-  };
-
-  const pendingCount = requests.filter((r) => r.status === "pending").length;
-  const approvedCount = requests.filter((r) => r.status === "approved").length;
-  const rejectedCount = requests.filter((r) => r.status === "rejected").length;
-
   if (loading) {
     return (
       <div className="bg-white/5 border border-white/10 rounded-3xl shadow-2xl shadow-black/40 p-6 backdrop-blur-lg">
@@ -151,22 +102,17 @@ export function DocumentRequestsManager() {
             <p className="text-sm text-slate-200">
               Verwalten Sie Anfragen von Benutzern für neue Dokumente
             </p>
+            <p className="text-xs text-slate-400">
+              Laden Sie die gewünschten Dokumente über die Dokumentenverwaltung hoch und indexieren Sie diese. Löschen Sie anschließend die Anfrage.
+            </p>
           </div>
         </div>
 
         {/* Stats */}
         <div className="flex items-center gap-2 text-xs">
           <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-[#66B3FF]/20 text-[#66B3FF] border border-[#66B3FF]/30">
-            <Clock className="w-3 h-3" />
-            {pendingCount} Ausstehend
-          </span>
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-[#0077DD]/20 text-[#0077DD] border border-[#0077DD]/30">
-            <CheckCircle2 className="w-3 h-3" />
-            {approvedCount} Genehmigt
-          </span>
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-500/20 text-slate-300 border border-slate-500/30">
-            <XCircle className="w-3 h-3" />
-            {rejectedCount} Abgelehnt
+            <FileText className="w-3 h-3" />
+            {requests.length} Anfragen
           </span>
         </div>
       </div>
@@ -193,18 +139,6 @@ export function DocumentRequestsManager() {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 space-y-2">
                   <div className="flex items-center gap-2">
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium border ${getStatusColor(
-                        request.status
-                      )}`}
-                    >
-                      {getStatusIcon(request.status)}
-                      {request.status === "pending"
-                        ? "Ausstehend"
-                        : request.status === "approved"
-                        ? "Genehmigt"
-                        : "Abgelehnt"}
-                    </span>
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/5 text-xs text-slate-300">
                       {request.type === "file" ? <FileText className="w-3 h-3" /> : <FileText className="w-3 h-3" />}
                       {request.type === "file" ? "Datei" : "Text"}
@@ -227,6 +161,18 @@ export function DocumentRequestsManager() {
                     <div className="flex items-center gap-2 text-sm text-slate-200">
                       <FileText className="w-4 h-4 text-slate-400" />
                       <span className="font-medium">{request.fileName}</span>
+                      {request.filePath && (
+                        <a
+                          href={`/api/document-requests/file?path=${encodeURIComponent(request.filePath)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#0077DD]/20 text-[#0077DD] text-xs font-medium hover:bg-[#0077DD]/30 transition-colors"
+                          title="Datei ansehen"
+                        >
+                          <Download className="w-3 h-3" />
+                          Ansehen
+                        </a>
+                      )}
                     </div>
                   )}
 
@@ -238,29 +184,9 @@ export function DocumentRequestsManager() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  {request.status === "pending" && (
-                    <>
-                      <button
-                        onClick={() => updateStatus(request.id, "approved")}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-500 transition-colors"
-                        title="Genehmigen"
-                      >
-                        <CheckCircle2 className="w-3 h-3" />
-                        Genehmigen
-                      </button>
-                      <button
-                        onClick={() => updateStatus(request.id, "rejected")}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-500 transition-colors"
-                        title="Ablehnen"
-                      >
-                        <XCircle className="w-3 h-3" />
-                        Ablehnen
-                      </button>
-                    </>
-                  )}
                   <button
                     onClick={() => deleteRequest(request.id)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 text-slate-400 text-xs font-medium hover:bg-red-500/20 hover:text-red-300 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-500 transition-colors"
                     title="Löschen"
                   >
                     <Trash2 className="w-3 h-3" />

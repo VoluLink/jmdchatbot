@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     const normalizedEmail = normalizeEmail(email);
 
     const result = await query(
-      `SELECT id, email, name, role, password_hash, two_fa_enabled, phone_number, must_change_password
+      `SELECT id, email, name, role, password_hash, two_fa_enabled, two_fa_required, phone_number, must_change_password
        FROM users
        WHERE email = $1 AND is_active = true`,
       [normalizedEmail]
@@ -91,6 +91,45 @@ export async function POST(request: NextRequest) {
         sessionToken,
         phoneNumberMasked: maskPhoneNumber(user.phone_number || ""),
       });
+    }
+
+    // Check if 2FA is required but not enabled
+    if (user.two_fa_required && !user.two_fa_enabled) {
+      await query(
+        "UPDATE users SET last_login = $1 WHERE id = $2",
+        [new Date().toISOString(), user.id]
+      );
+
+      const token = await new SignJWT({
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+      })
+        .setProtectedHeader({ alg: "HS256" })
+        .setIssuedAt()
+        .setExpirationTime("7d")
+        .sign(JWT_SECRET);
+
+      const response = NextResponse.json({
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        },
+        mustSetupTwoFa: true,
+      });
+
+      response.cookies.set("auth-token", token, {
+        httpOnly: true,
+        secure: isSecureRequest(request),
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7,
+        path: "/",
+      });
+
+      return response;
     }
 
     await query(

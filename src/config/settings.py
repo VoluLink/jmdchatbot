@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     chunk_size: int = 512  # Reduced from 1024 for better retrieval precision
     chunk_overlap: int = 50  # Reduced proportionally
 
+    # Frontend/CORS
+    frontend_url: Optional[str] = None
+    cors_allowed_origins: str = ""
+
     # Hybrid Search
     use_hybrid_search: bool = True
     bm25_weight: float = 0.5  # Weight for BM25 (0-1), vector gets (1 - bm25_weight)
@@ -54,6 +58,33 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @property
+    def resolved_cors_origins(self) -> List[str]:
+        origins: List[str] = [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ]
+
+        if self.frontend_url:
+            origins.append(self.frontend_url)
+
+        if self.cors_allowed_origins:
+            origins.extend(
+                item.strip()
+                for item in self.cors_allowed_origins.split(",")
+                if item.strip()
+            )
+
+        # Normalize and deduplicate while preserving order.
+        normalized: List[str] = []
+        seen = set()
+        for origin in origins:
+            clean = origin.rstrip("/")
+            if clean and clean not in seen:
+                normalized.append(clean)
+                seen.add(clean)
+        return normalized
 
 
 @lru_cache(maxsize=1)

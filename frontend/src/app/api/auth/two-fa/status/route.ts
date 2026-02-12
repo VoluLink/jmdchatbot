@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const userId = verified.payload.userId as string;
 
     const userResult = await query(
-      "SELECT two_fa_enabled, two_fa_enrolled_at FROM users WHERE id = $1",
+      "SELECT two_fa_enabled, two_fa_required, two_fa_enrolled_at FROM users WHERE id = $1",
       [userId]
     );
 
@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       enabled: userResult.rows[0].two_fa_enabled,
+      required: userResult.rows[0].two_fa_required,
       enrolledAt: userResult.rows[0].two_fa_enrolled_at,
       backupCodesRemaining: backupResult.rows[0]?.count ?? 0,
     });

@@ -40,6 +40,10 @@ export default function LoginPage() {
       if (data.requiresTwoFa) {
         setRequiresTwoFa(true);
         setSessionToken(data.sessionToken);
+      } else if (data.mustSetupTwoFa) {
+        // User must setup 2FA - redirect to settings to setup 2FA
+        router.push("/settings?setup2fa=true");
+        router.refresh();
       } else if (data.mustChangePassword) {
         // User must change password - redirect to change password page
         router.push("/change-password");
@@ -78,7 +82,11 @@ export default function LoginPage() {
       }
 
       if (data.success) {
-        if (data.mustChangePassword) {
+        if (data.mustSetupTwoFa) {
+          // User must setup 2FA
+          router.push("/settings?setup2fa=true");
+          router.refresh();
+        } else if (data.mustChangePassword) {
           // User must change password
           router.push("/change-password");
           router.refresh();

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Eye,
   CheckCircle2,
@@ -28,9 +29,11 @@ const DEFAULT_SETTINGS: SettingsState = {
   chunkSize: 512,
 };
 
-export default function SettingsPage() {
+function SettingsContent() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
   const [settings, setSettings] = useState<SettingsState>(DEFAULT_SETTINGS);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordStatus, setPasswordStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
@@ -39,6 +42,7 @@ export default function SettingsPage() {
   // 2FA states
   const [twoFaEnabled, setTwoFaEnabled] = useState(false);
   const [twoFaLoading, setTwoFaLoading] = useState(true);
+  const [twoFaRequired, setTwoFaRequired] = useState(false);
   const [backupCodesRemaining, setBackupCodesRemaining] = useState(0);
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [showDisableConfirm, setShowDisableConfirm] = useState(false);
@@ -61,7 +65,7 @@ export default function SettingsPage() {
     }
   }, []);
 
-  // Fetch 2FA status
+  // Fetch 2FA status and check query params
   useEffect(() => {
     const fetchTwoFaStatus = async () => {
       try {
@@ -69,7 +73,14 @@ export default function SettingsPage() {
         if (res.ok) {
           const data = await res.json();
           setTwoFaEnabled(data.enabled);
+          setTwoFaRequired(data.required || false);
           setBackupCodesRemaining(data.backupCodesRemaining || 0);
+
+          // Check if we need to auto-open 2FA setup
+          const setup2fa = searchParams.get("setup2fa");
+          if (setup2fa === "true" && !data.enabled) {
+            setShowSetupModal(true);
+          }
         }
       } catch (err) {
         console.error("Failed to fetch 2FA status:", err);
@@ -79,10 +90,15 @@ export default function SettingsPage() {
     };
 
     fetchTwoFaStatus();
-  }, []);
+  }, [searchParams]);
 
   const handlePasswordChange = async () => {
     setPasswordError("");
+
+    if (!currentPassword) {
+      setPasswordError("Aktuelles Passwort erforderlich");
+      return;
+    }
 
     if (newPassword.length < 6) {
       setPasswordError("Passwort muss mindestens 6 Zeichen lang sein");
@@ -96,14 +112,28 @@ export default function SettingsPage() {
 
     setPasswordStatus("saving");
 
-    // TODO: Implement password change API
-    // For now, just show success
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Fehler beim Ändern des Passworts");
+      }
+
       setPasswordStatus("success");
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       setTimeout(() => setPasswordStatus("idle"), 2000);
-    }, 1000);
+    } catch (err) {
+      setPasswordStatus("error");
+      setPasswordError(err instanceof Error ? err.message : "Fehler beim Ändern des Passworts");
+    }
   };
 
   const handleTwoFaSetupSuccess = () => {
@@ -262,7 +292,18 @@ export default function SettingsPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs text-slate-400 mb-2">Aktuelles Passwort</label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="••••••••"
+                  minLength={6}
+                  className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20"
+                />
+              </div>
               <div>
                 <label className="block text-xs text-slate-400 mb-2">Neues Passwort</label>
                 <input
@@ -288,7 +329,7 @@ export default function SettingsPage() {
             </div>
             <button
               onClick={handlePasswordChange}
-              disabled={!newPassword || !confirmPassword || passwordStatus === "saving"}
+              disabled={!currentPassword || !newPassword || !confirmPassword || passwordStatus === "saving"}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#00529E] text-white font-semibold hover:bg-[#0066C0] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {passwordStatus === "saving" ? (
@@ -375,20 +416,41 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* Disable Button */}
-              <button
-                onClick={() => setShowDisableConfirm(true)}
-                className="w-full px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-lg text-red-200 font-medium transition-colors"
-              >
-                2FA deaktivieren
-              </button>
+              {/* Disable Button - only show if not required */}
+              {!twoFaRequired && (
+                <button
+                  onClick={() => setShowDisableConfirm(true)}
+                  className="w-full px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-lg text-red-200 font-medium transition-colors"
+                >
+                  2FA deaktivieren
+                </button>
+              )}
+              {twoFaRequired && (
+                <div className="p-3 bg-slate-500/10 border border-slate-500/20 rounded-lg">
+                  <p className="text-xs text-slate-400 text-center">
+                    2FA wurde von einem Administrator als erforderlich markiert und kann nicht deaktiviert werden.
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             /* 2FA Disabled - Show Enable Option */
             <div className="space-y-4">
+              {twoFaRequired && (
+                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-amber-200 mb-1">2FA erforderlich</p>
+                    <p className="text-xs text-amber-300/80">
+                      Ein Administrator hat die Zwei-Faktor-Authentifizierung für dein Konto als erforderlich markiert.
+                      Bitte aktiviere 2FA, um dein Konto weiterhin nutzen zu können.
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                 <p className="text-sm text-blue-200 mb-3">
-                  <strong>Empfohlen:</strong> Aktiviere 2FA, um dein Konto besser zu schützen.
+                  <strong>{twoFaRequired ? "Erforderlich:" : "Empfohlen:"}</strong> Aktiviere 2FA, um dein Konto besser zu schützen.
                   Bei jedem Login wird zusätzlich zu deinem Passwort ein Code aus deiner Authenticator-App benötigt.
                 </p>
                 <ul className="space-y-1.5 text-xs text-blue-300/80">
@@ -591,5 +653,17 @@ function Toggle({
         />
       </span>
     </label>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-full w-full flex items-center justify-center bg-[#212121]">
+        <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+      </div>
+    }>
+      <SettingsContent />
+    </Suspense>
   );
 }

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Key, CheckCircle2, AlertCircle, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -87,7 +87,7 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Back to Login Link */}
         <Link
@@ -237,5 +237,17 @@ export default function ResetPasswordPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
+        <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+      </div>
+    }>
+      <ResetPasswordContent />
+    </Suspense>
   );
 }

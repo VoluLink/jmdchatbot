@@ -76,10 +76,13 @@ class IndexManager:
             return {}
 
     def _save_metadata(self) -> None:
-        self._metadata_path.write_text(
+        self._metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = self._metadata_path.with_suffix(self._metadata_path.suffix + ".tmp")
+        tmp_path.write_text(
             json.dumps(self._metadata, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+        tmp_path.replace(self._metadata_path)
 
     # ------------------------------------------------------------------
     # Node-Cache für BM25 Retrieval
@@ -212,8 +215,9 @@ class IndexManager:
                 "name": doc.metadata.get("name"),
                 "content_hash": content_hash,
             }
+            # Persist per document so UI can reflect indexing progress live.
+            self._save_metadata()
 
-        self._save_metadata()
         self._save_nodes_cache()
         return len(documents)
 

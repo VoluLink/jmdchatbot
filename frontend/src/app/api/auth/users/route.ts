@@ -51,7 +51,7 @@ async function createInviteLink(userId: string) {
     [tokenId, userId, token, createdAt, expiresAt]
   );
 
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  const frontendUrl = process.env.INVITE_FRONTEND_URL || process.env.FRONTEND_URL || "http://116.203.166.18:3000";
   return {
     inviteLink: `${frontendUrl}/reset-password?token=${token}`,
     expiresAt,
@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await query(
-      `SELECT id, name, email, role, created_at, last_login, must_change_password
+      `SELECT id, name, email, role, created_at, last_login, must_change_password, two_fa_enabled, two_fa_required
        FROM users
        WHERE is_active = true
        ORDER BY created_at DESC`
@@ -174,12 +174,100 @@ export async function GET(request: NextRequest) {
       createdAt: row.created_at,
       lastLogin: row.last_login,
       invitePending: !!row.must_change_password,
+      twoFaEnabled: !!row.two_fa_enabled,
+      twoFaRequired: !!row.two_fa_required,
     }));
 
     return NextResponse.json({ users });
   } catch (error) {
     console.error("Failed to list users:", error);
     return NextResponse.json({ users: [] });
+  }
+}
+
+// PATCH - Update user role or 2FA requirement (admin only)
+export async function PATCH(request: NextRequest) {
+  const auth = await verifyAdmin(request);
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: 403 });
+  }
+
+  try {
+    const body = (await request.json()) as {
+      userId?: string;
+      role?: "admin" | "user";
+      twoFaRequired?: boolean;
+    };
+
+    const userId = (body.userId || "").trim();
+    const role = body.role;
+    const twoFaRequired = body.twoFaRequired;
+
+    // Handle 2FA requirement toggle
+    if (userId && twoFaRequired !== undefined) {
+      await query(
+        "UPDATE users SET two_fa_required = $1 WHERE id = $2",
+        [twoFaRequired, userId]
+      );
+      return NextResponse.json({ success: true });
+    }
+
+    // Handle role update
+    if (!userId || (role !== "admin" && role !== "user")) {
+      return NextResponse.json(
+        { error: "User ID and valid role are required" },
+        { status: 400 }
+      );
+    }
+
+    if (userId === auth.userId) {
+      return NextResponse.json(
+        { error: "Cannot change your own role" },
+        { status: 400 }
+      );
+    }
+
+    const userResult = await query<{ id: string; role: "admin" | "user" }>(
+      "SELECT id, role FROM users WHERE id = $1 AND is_active = true",
+      [userId]
+    );
+
+    if (userResult.rowCount === 0) {
+      return NextResponse.json(
+        { error: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    const user = userResult.rows[0];
+
+    if (user.role === role) {
+      return NextResponse.json({ success: true, unchanged: true });
+    }
+
+    if (user.role === "admin" && role === "user") {
+      const adminCountResult = await query(
+        "SELECT COUNT(*)::int AS count FROM users WHERE role = 'admin' AND is_active = true"
+      );
+      const adminCount = adminCountResult.rows[0]?.count ?? 0;
+
+      if (adminCount <= 1) {
+        return NextResponse.json(
+          { error: "Cannot demote the last admin" },
+          { status: 400 }
+        );
+      }
+    }
+
+    await query("UPDATE users SET role = $1 WHERE id = $2", [role, userId]);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Failed to update user role:", error);
+    return NextResponse.json(
+      { error: "Failed to update user role" },
+      { status: 500 }
+    );
   }
 }
 
@@ -241,3 +329,4 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Failed to delete user" }, { status: 500 });
   }
 }
+

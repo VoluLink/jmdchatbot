@@ -11,7 +11,7 @@ interface ChatHistoryContextType {
   currentSession: ReturnType<typeof useChatHistory>["currentSession"];
   currentSessionId: string | null;
   isLoaded: boolean;
-  createSession: () => ReturnType<typeof useChatHistory>["currentSession"];
+  createSession: () => Promise<ReturnType<typeof useChatHistory>["currentSession"]>;
   updateSession: (sessionId: string, messages: ChatMessage[]) => void;
   deleteSession: (sessionId: string) => void;
   selectSession: (sessionId: string) => void;
@@ -28,11 +28,16 @@ export function useChatHistoryContext() {
 }
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
-  const chatHistory = useChatHistory();
   const { user, loading } = useAuth();
+  const chatHistory = useChatHistory(user?.id ?? null, !loading);
   const pathname = usePathname();
 
-  const isPublicPath = pathname === "/login" || pathname === "/register";
+  const isPublicPath =
+    pathname === "/login" ||
+    pathname === "/register" ||
+    pathname === "/reset-password" ||
+    pathname === "/forgot-password" ||
+    pathname === "/login/backup-code";
 
   // Show loading spinner while checking auth
   if (loading && !isPublicPath) {

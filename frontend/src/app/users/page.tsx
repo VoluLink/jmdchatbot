@@ -9,7 +9,6 @@ import {
   Crown,
   Users,
   Search,
-  RefreshCw,
   Shield,
   X,
   CheckCircle2,
@@ -17,6 +16,7 @@ import {
   Key,
   Lock,
   Copy,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -29,11 +29,14 @@ interface User {
   createdAt: string;
   lastLogin?: string;
   invitePending?: boolean;
+  twoFaEnabled?: boolean;
+  twoFaRequired?: boolean;
 }
 
 type ModalType =
   | { type: "add" }
   | { type: "delete"; user: User }
+  | { type: "edit-role"; user: User }
   | { type: "reset-password"; user: User }
   | null;
 
@@ -42,6 +45,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "success" | "error">("idle");
   const [inviteInfo, setInviteInfo] = useState<{
     email: string;
     link: string;
@@ -130,6 +134,43 @@ export default function UsersPage() {
     }
   };
 
+  const handleUpdateRole = async (userId: string, role: "admin" | "user") => {
+    setBusyId(userId);
+    try {
+      const res = await fetch("/api/auth/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, role }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update role");
+      await fetchUsers();
+      setModal(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update role");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleToggleTwoFaRequired = async (userId: string, required: boolean) => {
+    setBusyId(userId);
+    try {
+      const res = await fetch("/api/auth/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, twoFaRequired: required }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update 2FA requirement");
+      await fetchUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update 2FA requirement");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const filteredUsers = users.filter(user => 
     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -139,7 +180,7 @@ export default function UsersPage() {
   const userCount = users.filter(u => u.role === "user").length;
 
   const formatDate = (isoString?: string) => {
-    if (!isoString) return "â€“";
+    if (!isoString) return "-";
     return new Date(isoString).toLocaleDateString("de-DE", {
       day: "numeric",
       month: "short",
@@ -151,12 +192,53 @@ export default function UsersPage() {
 
   const isAdmin = currentUser?.role === "admin";
 
+  const copyWithFallback = (text: string): boolean => {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-9999px";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    let success = false;
+    try {
+      success = document.execCommand("copy");
+    } catch {
+      success = false;
+    } finally {
+      document.body.removeChild(textarea);
+    }
+
+    return success;
+  };
+
   const copyInviteLink = async () => {
     if (!inviteInfo?.link) return;
+
     try {
-      await navigator.clipboard.writeText(inviteInfo.link);
+      if (
+        typeof navigator !== "undefined" &&
+        navigator.clipboard?.writeText &&
+        typeof window !== "undefined" &&
+        window.isSecureContext
+      ) {
+        await navigator.clipboard.writeText(inviteInfo.link);
+      } else {
+        const ok = copyWithFallback(inviteInfo.link);
+        if (!ok) throw new Error("copy_failed");
+      }
+
+      setError(null);
+      setCopyStatus("success");
+      setTimeout(() => setCopyStatus("idle"), 2000);
     } catch {
-      setError("Einladungslink konnte nicht kopiert werden");
+      setCopyStatus("error");
+      setError(
+        "Einladungslink konnte nicht automatisch kopiert werden. Bitte Link manuell markieren und kopieren."
+      );
     }
   };
 
@@ -211,7 +293,7 @@ export default function UsersPage() {
           {inviteInfo && (
             <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg space-y-2">
               <p className="text-sm text-emerald-200">
-                Einladung erstellt fÃ¼r <span className="font-medium">{inviteInfo.email}</span>.
+                Einladung erstellt fuer <span className="font-medium">{inviteInfo.email}</span>.
               </p>
               <p className="text-xs text-emerald-300/80 break-all">{inviteInfo.link}</p>
               <div className="flex items-center gap-2">
@@ -219,13 +301,27 @@ export default function UsersPage() {
                   onClick={copyInviteLink}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30 transition-colors"
                 >
-                  <Copy className="w-3.5 h-3.5" />
-                  Link kopieren
+                  {copyStatus === "success" ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Kopiert
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      Link kopieren
+                    </>
+                  )}
                 </button>
                 <span className="text-xs text-emerald-300/70">
-                  GÃ¼ltig bis {formatDate(inviteInfo.expiresAt)}
+                  Gueltig bis {formatDate(inviteInfo.expiresAt)}
                 </span>
               </div>
+              {copyStatus === "error" && (
+                <p className="text-xs text-amber-200/90">
+                  Falls Kopieren blockiert ist: Link markieren und mit Strg+C kopieren.
+                </p>
+              )}
             </div>
           )}
 
@@ -289,15 +385,19 @@ export default function UsersPage() {
                   <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-6 py-4">
                     Rolle
                   </th>
-                  <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-6 py-4">
-                    Erstellt am
-                  </th>
-                  <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-6 py-4">
-                    Letzter Login
-                  </th>
-                  <th className="text-right text-xs font-medium text-slate-400 uppercase tracking-wider px-6 py-4">
-                    Aktionen
-                  </th>
+                  {isAdmin && (
+                    <>
+                      <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-6 py-4">
+                        Erstellt am
+                      </th>
+                      <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider px-6 py-4">
+                        Letzter Login
+                      </th>
+                      <th className="text-right text-xs font-medium text-slate-400 uppercase tracking-wider px-6 py-4">
+                        Aktionen
+                      </th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -345,55 +445,88 @@ export default function UsersPage() {
                             </>
                           )}
                         </span>
-                        {user.invitePending && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/20 text-amber-300">
+                        {isAdmin && user.invitePending && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-500/20 text-slate-300 border border-slate-500/30">
                             Einladung offen
+                          </span>
+                        )}
+                        {isAdmin && user.twoFaEnabled && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            <Shield className="h-3 w-3" />
+                            2FA aktiv
+                          </span>
+                        )}
+                        {isAdmin && user.twoFaRequired && !user.twoFaEnabled && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            <Shield className="h-3 w-3" />
+                            2FA erforderlich
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-slate-400">
-                        {formatDate(user.createdAt)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-slate-400">
-                        {formatDate(user.lastLogin)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      {isAdmin ? (
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => setModal({ type: "reset-password", user })}
-                            disabled={busyId === user.id}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Passwort zurÃ¼cksetzen"
-                          >
-                            <Key className="w-3 h-3" />
-                            <span>Reset</span>
-                          </button>
-                          <button
-                            onClick={() => setModal({ type: "delete", user })}
-                            disabled={busyId === user.id || user.id === currentUser?.id}
-                            className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={user.id === currentUser?.id ? "Kann dich selbst nicht lÃ¶schen" : "Benutzer lÃ¶schen"}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-end">
-                          <span className="text-xs text-slate-500">â€“</span>
-                        </div>
-                      )}
-                    </td>
+                    {isAdmin && (
+                      <>
+                        <td className="px-6 py-4">
+                          <span className="text-sm text-slate-400">
+                            {formatDate(user.createdAt)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-sm text-slate-400">
+                            {formatDate(user.lastLogin)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setModal({ type: "edit-role", user })}
+                              disabled={busyId === user.id || user.id === currentUser?.id}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={user.id === currentUser?.id ? "Eigene Rolle kann nicht geaendert werden" : "Rolle aendern"}
+                            >
+                              <Shield className="w-3 h-3" />
+                              <span>Rolle</span>
+                            </button>
+                            <button
+                              onClick={() => handleToggleTwoFaRequired(user.id, !user.twoFaRequired)}
+                              disabled={busyId === user.id}
+                              className={cn(
+                                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed",
+                                user.twoFaRequired
+                                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30"
+                                  : "bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20"
+                              )}
+                              title={user.twoFaRequired ? "2FA nicht mehr erforderlich" : "2FA erforderlich machen"}
+                            >
+                              <Shield className="w-3 h-3" />
+                              <span>2FA</span>
+                            </button>
+                            <button
+                              onClick={() => setModal({ type: "reset-password", user })}
+                              disabled={busyId === user.id}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all bg-white/5 text-slate-400 border border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Passwort zuruecksetzen"
+                            >
+                              <Key className="w-3 h-3" />
+                              <span>Reset</span>
+                            </button>
+                            <button
+                              onClick={() => setModal({ type: "delete", user })}
+                              disabled={busyId === user.id || user.id === currentUser?.id}
+                              className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={user.id === currentUser?.id ? "Kann dich selbst nicht loeschen" : "Benutzer loeschen"}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 ))}
                 {filteredUsers.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center">
+                    <td colSpan={isAdmin ? 5 : 2} className="px-6 py-12 text-center">
                       <UserIcon className="h-12 w-12 text-slate-600 mx-auto mb-3" />
                       <p className="text-slate-400">
                         {searchQuery ? "Keine Benutzer gefunden" : "Keine Benutzer vorhanden"}
@@ -427,6 +560,16 @@ export default function UsersPage() {
           user={modal.user}
           onConfirm={() => handleDelete(modal.user.id)}
           onCancel={() => setModal(null)}
+        />
+      )}
+
+      {/* Edit Role Modal */}
+      {modal?.type === "edit-role" && (
+        <EditRoleModal
+          user={modal.user}
+          onConfirm={(role) => handleUpdateRole(modal.user.id, role)}
+          onCancel={() => setModal(null)}
+          busy={busyId === modal.user.id}
         />
       )}
 
@@ -498,19 +641,22 @@ function AddUserModal({
               className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20 transition-all"
             />
           </div>          <p className="text-xs text-slate-500">
-            Der Benutzer erhält einen Einladungslink und setzt sein Passwort selbst.
+            Der Benutzer erhaelt einen Einladungslink und setzt sein Passwort selbst.
           </p>
 
           <div>
             <label className="block text-sm text-slate-300 mb-2">Rolle</label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as "admin" | "user")}
-              className="w-full px-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20 transition-all"
-            >
-              <option value="user">Benutzer</option>
-              <option value="admin">Administrator</option>
-            </select>
+            <div className="relative">
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as "admin" | "user")}
+                className="w-full appearance-none pl-4 pr-10 py-2.5 bg-[#1f1f1f]/95 border border-white/15 rounded-lg text-white shadow-inner shadow-black/20 focus:outline-none focus:border-[#0077DD]/50 focus:ring-2 focus:ring-[#0077DD]/20 transition-all"
+              >
+                <option value="user">Benutzer</option>
+                <option value="admin">Administrator</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            </div>
           </div>
 
           <div className="flex gap-3 justify-end pt-2">
@@ -530,7 +676,7 @@ function AddUserModal({
               {busy ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Erstelleâ€¦</span>
+                  <span>Erstelle...</span>
                 </>
               ) : (
                 <>
@@ -564,12 +710,12 @@ function DeleteUserModal({
         className="bg-[#2a2a2a] border border-white/15 rounded-2xl shadow-2xl p-6 w-full max-w-md animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold text-white mb-4">Benutzer lÃ¶schen?</h3>
+        <h3 className="text-lg font-semibold text-white mb-4">Benutzer loeschen?</h3>
         <p className="text-sm text-slate-300 mb-6">
-          MÃ¶chten Sie <span className="font-semibold text-white">{user.name}</span> ({user.email}) wirklich lÃ¶schen?
+          Moechten Sie <span className="font-semibold text-white">{user.name}</span> ({user.email}) wirklich loeschen?
           {user.role === "admin" && (
             <span className="block mt-2 text-purple-300">
-              âš ï¸ Dies ist ein Administrator-Account
+              Hinweis: Dies ist ein Administrator-Account
             </span>
           )}
         </p>
@@ -584,7 +730,7 @@ function DeleteUserModal({
             onClick={onConfirm}
             className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-500 transition-all"
           >
-            LÃ¶schen
+            Loeschen
           </button>
         </div>
       </div>
@@ -617,7 +763,7 @@ function ResetPasswordModal({
     }
 
     if (newPassword !== confirmPassword) {
-      setError("PasswÃ¶rter stimmen nicht Ã¼berein");
+      setError("Passwoerter stimmen nicht ueberein");
       return;
     }
 
@@ -638,7 +784,7 @@ function ResetPasswordModal({
             <Key className="h-5 w-5 text-[#0077DD]" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-white">Passwort zurÃ¼cksetzen</h3>
+            <h3 className="text-lg font-semibold text-white">Passwort zuruecksetzen</h3>
             <p className="text-sm text-slate-400">{user.name} ({user.email})</p>
           </div>
         </div>
@@ -659,7 +805,7 @@ function ResetPasswordModal({
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                placeholder="********"
                 autoFocus
                 required
                 minLength={6}
@@ -670,14 +816,14 @@ function ResetPasswordModal({
           </div>
 
           <div>
-            <label className="block text-sm text-slate-300 mb-2">Passwort bestÃ¤tigen</label>
+            <label className="block text-sm text-slate-300 mb-2">Passwort bestaetigen</label>
             <div className="relative">
               <CheckCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                placeholder="********"
                 required
                 minLength={6}
                 className="w-full pl-10 pr-4 py-2.5 bg-black/30 border border-white/15 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:border-[#0066C0]/50 focus:ring-2 focus:ring-[#0066C0]/20 transition-all"
@@ -702,12 +848,113 @@ function ResetPasswordModal({
               {busy ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Speichernâ€¦</span>
+                  <span>Speichern...</span>
                 </>
               ) : (
                 <>
                   <Key className="w-4 h-4" />
                   <span>Passwort setzen</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EditRoleModal({
+  user,
+  onConfirm,
+  onCancel,
+  busy,
+}: {
+  user: User;
+  onConfirm: (role: "admin" | "user") => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  const [role, setRole] = useState<"admin" | "user">(user.role);
+  const [error, setError] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (role === user.role) {
+      setError("Bitte eine andere Rolle auswaehlen");
+      return;
+    }
+
+    onConfirm(role);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-[#2a2a2a] border border-white/15 rounded-2xl shadow-2xl p-6 w-full max-w-md animate-in fade-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-[#0066C0]/20 rounded-lg">
+            <Shield className="h-5 w-5 text-[#0077DD]" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-white">Rolle aendern</h3>
+            <p className="text-sm text-slate-400">{user.name} ({user.email})</p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+            <p className="text-sm text-red-200">{error}</p>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm text-slate-300 mb-2">Neue Rolle</label>
+            <div className="relative">
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as "admin" | "user")}
+                className="w-full appearance-none pl-4 pr-10 py-2.5 bg-[#1f1f1f]/95 border border-white/15 rounded-lg text-white shadow-inner shadow-black/20 focus:outline-none focus:border-[#0077DD]/50 focus:ring-2 focus:ring-[#0077DD]/20 transition-all"
+              >
+                <option value="user">Benutzer</option>
+                <option value="admin">Administrator</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            </div>
+          </div>
+
+          <div className="flex gap-3 justify-end pt-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={busy}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-white/5 transition-colors disabled:opacity-50"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="submit"
+              disabled={busy || role === user.role}
+              className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#00529E] text-white hover:bg-[#0066C0] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+            >
+              {busy ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Speichern...</span>
+                </>
+              ) : (
+                <>
+                  <Shield className="w-4 h-4" />
+                  <span>Rolle speichern</span>
                 </>
               )}
             </button>
