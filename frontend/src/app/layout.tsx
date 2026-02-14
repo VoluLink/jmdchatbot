@@ -15,8 +15,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RAG Seminararbeit",
+  title: "JMDChatbot",
   description: "RAG Assistant Interface",
+  icons: {
+    icon: "/images/KJF_Logo.jpeg",
+    shortcut: "/images/KJF_Logo.jpeg",
+    apple: "/images/KJF_Logo.jpeg",
+  },
 };
 
 export default function RootLayout({

@@ -151,14 +151,19 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - List all users (admin only)
+// GET - List all users (all authenticated users can view)
 export async function GET(request: NextRequest) {
-  const auth = await verifyAdmin(request);
-  if (!auth.authorized) {
-    return NextResponse.json({ error: auth.error }, { status: 403 });
-  }
-
   try {
+    const token = request.cookies.get("auth-token")?.value;
+
+    if (!token) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    const verified = await jwtVerify(token, JWT_SECRET);
+    const userRole = verified.payload.role as string;
+    const isAdmin = userRole === "admin";
+
     const result = await query(
       `SELECT id, name, email, role, created_at, last_login, must_change_password, two_fa_enabled, two_fa_required
        FROM users
@@ -171,17 +176,18 @@ export async function GET(request: NextRequest) {
       name: row.name,
       email: row.email,
       role: row.role,
-      createdAt: row.created_at,
-      lastLogin: row.last_login,
-      invitePending: !!row.must_change_password,
-      twoFaEnabled: !!row.two_fa_enabled,
-      twoFaRequired: !!row.two_fa_required,
+      // Only include sensitive fields for admins
+      createdAt: isAdmin ? row.created_at : undefined,
+      lastLogin: isAdmin ? row.last_login : undefined,
+      invitePending: isAdmin ? !!row.must_change_password : undefined,
+      twoFaEnabled: isAdmin ? !!row.two_fa_enabled : undefined,
+      twoFaRequired: isAdmin ? !!row.two_fa_required : undefined,
     }));
 
     return NextResponse.json({ users });
   } catch (error) {
     console.error("Failed to list users:", error);
-    return NextResponse.json({ users: [] });
+    return NextResponse.json({ error: "Failed to list users" }, { status: 500 });
   }
 }
 

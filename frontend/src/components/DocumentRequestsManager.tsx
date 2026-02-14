@@ -186,7 +186,7 @@ export function DocumentRequestsManager() {
                 <div className="flex flex-col gap-2">
                   <button
                     onClick={() => deleteRequest(request.id)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-500 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-600 text-white text-xs font-medium hover:bg-slate-500 transition-colors"
                     title="Löschen"
                   >
                     <Trash2 className="w-3 h-3" />

@@ -282,8 +282,15 @@ export function DocumentManager() {
         running?: boolean;
         success?: boolean;
         message?: string;
+        errorTail?: string;
+        outputTail?: string;
       };
       if (!status.running) {
+        // Include error details in the message if indexing failed
+        if (status.success === false && status.errorTail) {
+          const errorMessage = status.errorTail.trim().split('\n').slice(-5).join('\n');
+          status.message = `${status.message}\n\nFehlerdetails:\n${errorMessage}`;
+        }
         return status as { success?: boolean; message?: string };
       }
 

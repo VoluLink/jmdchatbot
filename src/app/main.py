@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import Any, Dict, List, Optional
+import subprocess
+import sys
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional, TextIO, TypedDict
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 from llama_index.core.query_engine import CitationQueryEngine
 from llama_index.core.prompts import PromptTemplate
 from llama_index.core.response_synthesizers import get_response_synthesizer
@@ -69,6 +75,113 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     answer: str
     sources: List[Dict[str, Any]]
+
+
+class IndexJobRequest(BaseModel):
+    force: bool = False
+    semantic: bool = False
+    targetPaths: List[str] = Field(default_factory=list)
+
+
+class IndexJobState(TypedDict):
+    running: bool
+    startedAt: Optional[str]
+    finishedAt: Optional[str]
+    success: Optional[bool]
+    exitCode: Optional[int]
+    message: Optional[str]
+    outputTail: str
+    errorTail: str
+
+
+MAX_TAIL_CHARS = 12000
+_index_job_lock = threading.Lock()
+_index_job_state: IndexJobState = {
+    "running": False,
+    "startedAt": None,
+    "finishedAt": None,
+    "success": None,
+    "exitCode": None,
+    "message": None,
+    "outputTail": "",
+    "errorTail": "",
+}
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _trim_tail(current: str, chunk: str) -> str:
+    next_tail = current + chunk
+    if len(next_tail) <= MAX_TAIL_CHARS:
+        return next_tail
+    return next_tail[-MAX_TAIL_CHARS:]
+
+
+def _normalize_target_paths(target_paths: List[str]) -> List[str]:
+    cleaned: List[str] = []
+    for rel_path in target_paths:
+        if not isinstance(rel_path, str):
+            continue
+        normalized = rel_path.strip()
+        if normalized:
+            cleaned.append(normalized)
+    return cleaned
+
+
+def _build_indexer_args(
+    force: bool,
+    semantic: bool,
+    target_paths: List[str],
+) -> List[str]:
+    if target_paths:
+        args: List[str] = ["-m", "src.updater.index_selected"]
+        for rel_path in target_paths:
+            args.extend(["--path", rel_path])
+        if force:
+            args.append("--force")
+        return args
+
+    args = ["-m", "src.updater.advanced_jobs"]
+    if force:
+        args.append("--force")
+    if semantic:
+        args.append("--semantic")
+    return args
+
+
+def _repo_root() -> Path:
+    # src/app/main.py -> repo root is two levels up.
+    return Path(__file__).resolve().parents[2]
+
+
+def _capture_process_stream(
+    stream: Optional[TextIO],
+    state_key: Literal["outputTail", "errorTail"],
+) -> None:
+    if stream is None:
+        return
+    try:
+        for chunk in stream:
+            with _index_job_lock:
+                _index_job_state[state_key] = _trim_tail(_index_job_state[state_key], chunk)
+    finally:
+        stream.close()
+
+
+def _watch_index_process(process: subprocess.Popen[str]) -> None:
+    exit_code = process.wait()
+    with _index_job_lock:
+        _index_job_state["running"] = False
+        _index_job_state["finishedAt"] = _utc_now_iso()
+        _index_job_state["success"] = exit_code == 0
+        _index_job_state["exitCode"] = exit_code
+        _index_job_state["message"] = (
+            "Indexierung abgeschlossen."
+            if exit_code == 0
+            else "Indexierung fehlgeschlagen."
+        )
 
 
 settings = get_settings()
@@ -161,6 +274,95 @@ async def health() -> Dict[str, Any]:
         "query_transform_strategy": settings.query_transform_strategy if settings.use_query_transform else None,
         "cached_nodes": nodes_count,
     }
+
+
+@app.get("/query/index-job")
+async def get_index_job_status() -> Dict[str, Any]:
+    with _index_job_lock:
+        return dict(_index_job_state)
+
+
+@app.post("/query/index-job")
+async def start_index_job(req: IndexJobRequest) -> JSONResponse:
+    target_paths = _normalize_target_paths(req.targetPaths)
+
+    if req.targetPaths and not target_paths:
+        return JSONResponse(
+            {"error": "No valid target paths provided"},
+            status_code=400,
+        )
+
+    with _index_job_lock:
+        if _index_job_state["running"]:
+            return JSONResponse(
+                {
+                    "success": False,
+                    "running": True,
+                    "message": "Indexierung laeuft bereits.",
+                },
+                status_code=409,
+            )
+
+    args = _build_indexer_args(req.force, req.semantic, target_paths)
+    command = [sys.executable, *args]
+
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=str(_repo_root()),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+    except Exception as exc:
+        return JSONResponse(
+            {"error": f"Failed to start indexing job: {exc}"},
+            status_code=500,
+        )
+
+    with _index_job_lock:
+        _index_job_state["running"] = True
+        _index_job_state["startedAt"] = _utc_now_iso()
+        _index_job_state["finishedAt"] = None
+        _index_job_state["success"] = None
+        _index_job_state["exitCode"] = None
+        _index_job_state["message"] = (
+            "Gezielte Indexierung gestartet."
+            if target_paths
+            else "Indexierung gestartet."
+        )
+        _index_job_state["outputTail"] = ""
+        _index_job_state["errorTail"] = ""
+
+    threading.Thread(
+        target=_capture_process_stream,
+        args=(process.stdout, "outputTail"),
+        daemon=True,
+    ).start()
+    threading.Thread(
+        target=_capture_process_stream,
+        args=(process.stderr, "errorTail"),
+        daemon=True,
+    ).start()
+    threading.Thread(
+        target=_watch_index_process,
+        args=(process,),
+        daemon=True,
+    ).start()
+
+    return JSONResponse(
+        {
+            "success": True,
+            "running": True,
+            "message": (
+                "Gezielte Indexierung wurde im Hintergrund gestartet."
+                if target_paths
+                else "Indexierung wurde im Hintergrund gestartet."
+            ),
+        },
+        status_code=202,
+    )
 
 
 @app.post("/query", response_model=QueryResponse)
