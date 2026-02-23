@@ -240,6 +240,47 @@ class IndexManager:
 
         return changed
 
+    def delete_documents_by_path(self, file_path: str) -> int:
+        """Delete all document parts whose metadata 'path' matches the given file path."""
+        doc_ids = [
+            doc_id for doc_id, meta in self._metadata.items()
+            if meta.get("path") == file_path
+        ]
+        for doc_id in doc_ids:
+            self.delete_document(doc_id)
+        return len(doc_ids)
+
+    def delete_documents_by_paths(self, file_paths: List[str]) -> int:
+        """Batch delete documents matching any of the given file paths."""
+        path_set = set(file_paths)
+        doc_ids = [
+            doc_id for doc_id, meta in self._metadata.items()
+            if meta.get("path") in path_set
+        ]
+        for doc_id in doc_ids:
+            self.delete_document(doc_id)
+        return len(doc_ids)
+
+    def delete_documents_by_prefix(self, path_prefix: str) -> int:
+        """Delete all documents whose metadata 'path' starts with the given prefix (folder deletion)."""
+        doc_ids = [
+            doc_id for doc_id, meta in self._metadata.items()
+            if meta.get("path", "").startswith(path_prefix)
+        ]
+        for doc_id in doc_ids:
+            self.delete_document(doc_id)
+        return len(doc_ids)
+
+    def delete_documents_by_url(self, url: str) -> int:
+        """Delete all document parts whose metadata 'url' matches the given URL."""
+        doc_ids = [
+            doc_id for doc_id, meta in self._metadata.items()
+            if meta.get("url") == url
+        ]
+        for doc_id in doc_ids:
+            self.delete_document(doc_id)
+        return len(doc_ids)
+
     def get_all_document_ids(self) -> List[str]:
         """
         Gibt alle doc_ids zurück, die aktuell im Index sind.

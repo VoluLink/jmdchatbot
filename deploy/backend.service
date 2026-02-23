@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=G:/rag-seminararbeit
-EnvironmentFile=G:/rag-seminararbeit/deploy/backend.env
-ExecStart=G:/rag-seminararbeit/.venv/Scripts/python.exe -m uvicorn src.app.main:app --host 0.0.0.0 --port 8000
+WorkingDirectory=/home/projekt/jmdchatbot
+EnvironmentFile=/home/projekt/jmdchatbot/deploy/backend.env
+ExecStart=/home/projekt/jmdchatbot/.venv/bin/python -m uvicorn src.app.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=5
 

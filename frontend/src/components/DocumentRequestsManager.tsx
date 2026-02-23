@@ -148,8 +148,7 @@ export function DocumentRequestsManager() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-xs text-slate-400">
                       <User className="w-3 h-3" />
-                      <span>{request.userName}</span>
-                      <span>({request.userEmail})</span>
+                      <span>{request.userEmail}</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-slate-400">
                       <Calendar className="w-3 h-3" />

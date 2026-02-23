@@ -56,29 +56,35 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now rag-backend.service
 ```
 
-## 5) Reverse proxy + TLS
+## 5) Reverse proxy + TLS (nginx)
 
-Use Caddy on the host and point your domain to the server.
+Install nginx and copy the site config:
 
 ```bash
-# Install Caddy (per docs)
-# then place the file:
-sudo cp deploy/caddy/Caddyfile /etc/caddy/Caddyfile
-sudo systemctl reload caddy
+sudo apt install nginx -y
+sudo cp deploy/nginx/jmdchatbot.conf /etc/nginx/sites-available/jmdchatbot
+sudo ln -sf /etc/nginx/sites-available/jmdchatbot /etc/nginx/sites-enabled/jmdchatbot
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# Test and reload
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
-Caddy will route:
-- `/` -> Next.js app (port 3000)
-- `/query` -> FastAPI backend (port 8000)
+nginx will route:
+- `/query`, `/health`, `/documents` -> FastAPI backend (port 8000)
+- Everything else -> Next.js app (port 3000)
+
+SSL is handled via Let's Encrypt certificates at `/etc/letsencrypt/live/jmdchatbot.kjf-regensburg.de/`.
 
 ## 6) Verify
 
-- Visit https://example.com
+- Visit https://jmdchatbot.kjf-regensburg.de
 - Login / create user
 - Ask a question in the chat
 
 ## Notes
 
-- If you don't use Caddy, set `NEXT_PUBLIC_API_BASE_URL` to your backend URL.
 - Keep Postgres port closed to the public internet.
 - Set `JWT_SECRET` to a real value.
+- Renew SSL certificates: `sudo certbot renew --nginx`

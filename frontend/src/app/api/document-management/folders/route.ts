@@ -4,6 +4,7 @@ import path from "path";
 
 import { normalizeRelPath, resolveUnderSources } from "../_paths";
 import { verifyAdmin } from "../_auth";
+import { getBackendBaseUrl } from "@/lib/backend";
 
 export async function POST(request: NextRequest) {
   const auth = await verifyAdmin(request);
@@ -95,6 +96,22 @@ export async function DELETE(request: NextRequest) {
     }
 
     const { absTarget } = resolveUnderSources(folderRel);
+
+    // Clean up vectors, metadata, and BM25 cache BEFORE deleting from disk
+    try {
+      const baseUrl = getBackendBaseUrl();
+      // Use path prefix with trailing separator so "folderA" doesn't match "folderAB"
+      const prefix = absTarget.endsWith(path.sep)
+        ? absTarget
+        : absTarget + path.sep;
+      await fetch(`${baseUrl}/documents`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path_prefixes: [prefix] }),
+      });
+    } catch (backendErr) {
+      console.warn("Failed to clean up folder documents from index:", backendErr);
+    }
 
     // Recursive delete (default: true for better UX)
     const recursive = body.recursive !== false;

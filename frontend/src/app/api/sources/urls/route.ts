@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { DATA_DIR } from "../../document-management/_paths";
+import { getBackendBaseUrl } from "@/lib/backend";
 
 type UrlSource = {
   id: string;
@@ -143,12 +144,25 @@ export async function DELETE(request: NextRequest) {
     }
 
     const sources = await readUrlSources();
-    const filtered = sources.filter((s) => s.id !== id);
+    const source = sources.find((s) => s.id === id);
 
-    if (filtered.length === sources.length) {
+    if (!source) {
       return NextResponse.json({ error: "URL source not found" }, { status: 404 });
     }
 
+    // Clean up vectors, metadata, and BM25 cache for this URL
+    try {
+      const baseUrl = getBackendBaseUrl();
+      await fetch(`${baseUrl}/documents`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls: [source.url] }),
+      });
+    } catch (backendErr) {
+      console.warn("Failed to clean up URL document from index:", backendErr);
+    }
+
+    const filtered = sources.filter((s) => s.id !== id);
     await writeUrlSources(filtered);
 
     return NextResponse.json({ success: true });

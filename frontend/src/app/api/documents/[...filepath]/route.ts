@@ -4,6 +4,7 @@ import path from "path";
 
 import { resolveUnderSources } from "../../document-management/_paths";
 import { verifyAdmin } from "../../document-management/_auth";
+import { getBackendBaseUrl } from "@/lib/backend";
 
 export async function GET(
   request: NextRequest,
@@ -79,6 +80,18 @@ export async function DELETE(
     }
 
     fs.unlinkSync(absTarget);
+
+    // Clean up vectors, metadata, and BM25 cache in the Python backend
+    try {
+      const baseUrl = getBackendBaseUrl();
+      await fetch(`${baseUrl}/documents`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paths: [absTarget] }),
+      });
+    } catch (backendErr) {
+      console.warn("Failed to clean up document from index:", backendErr);
+    }
 
     return NextResponse.json({ success: true, message: "File deleted" });
   } catch (error) {

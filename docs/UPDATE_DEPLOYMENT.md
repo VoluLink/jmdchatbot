@@ -57,7 +57,7 @@ sudo systemctl status rag-backend.service --no-pager
 docker compose -f docker-compose.prod.yml --env-file .env.prod exec app printenv NEXT_PUBLIC_API_BASE_URL
 curl -I http://127.0.0.1:3000
 curl -I http://127.0.0.1:8000/docs
-curl -i -X OPTIONS http://127.0.0.1:8000/query -H "Origin: http://116.203.166.18:3000" -H "Access-Control-Request-Method: POST" | grep -i access-control-allow-origin
+curl -i -X OPTIONS http://127.0.0.1:8000/query -H "Origin: https://jmdchatbot.kjf-regensburg.de" -H "Access-Control-Request-Method: POST" | grep -i access-control-allow-origin
 ```
 
 ## Cleanup

@@ -65,6 +65,12 @@ Antwort: """
 )
 
 
+class DeleteDocumentsRequest(BaseModel):
+    paths: List[str] = Field(default_factory=list)
+    urls: List[str] = Field(default_factory=list)
+    path_prefixes: List[str] = Field(default_factory=list)
+
+
 class QueryRequest(BaseModel):
     question: str
     top_k: int = 5
@@ -273,6 +279,37 @@ async def health() -> Dict[str, Any]:
         "query_transform": settings.use_query_transform,
         "query_transform_strategy": settings.query_transform_strategy if settings.use_query_transform else None,
         "cached_nodes": nodes_count,
+    }
+
+
+@app.delete("/documents")
+async def delete_documents(req: DeleteDocumentsRequest) -> Dict[str, Any]:
+    """
+    Delete documents from the vector DB, metadata, and BM25 cache.
+
+    Accepts file paths, URLs, or path prefixes (for folder deletion).
+    """
+    if not req.paths and not req.urls and not req.path_prefixes:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one of 'paths', 'urls', or 'path_prefixes' must be provided.",
+        )
+
+    total_deleted = 0
+
+    for file_path in req.paths:
+        total_deleted += index_manager.delete_documents_by_path(file_path)
+
+    for prefix in req.path_prefixes:
+        total_deleted += index_manager.delete_documents_by_prefix(prefix)
+
+    for url in req.urls:
+        total_deleted += index_manager.delete_documents_by_url(url)
+
+    return {
+        "success": True,
+        "deleted": total_deleted,
+        "message": f"{total_deleted} document(s) removed from index.",
     }
 
 

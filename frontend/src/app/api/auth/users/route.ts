@@ -51,7 +51,7 @@ async function createInviteLink(userId: string) {
     [tokenId, userId, token, createdAt, expiresAt]
   );
 
-  const frontendUrl = process.env.INVITE_FRONTEND_URL || process.env.FRONTEND_URL || "http://116.203.166.18:3000";
+  const frontendUrl = process.env.INVITE_FRONTEND_URL || process.env.FRONTEND_URL || "https://jmdchatbot.kjf-regensburg.de";
   return {
     inviteLink: `${frontendUrl}/reset-password?token=${token}`,
     expiresAt,
