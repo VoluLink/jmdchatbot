@@ -207,7 +207,7 @@ export function ChatInterface() {
                   key={suggestion}
                   onClick={() => {
                       setInput(suggestion);
-                      // Small hack to trigger submit after state update
+                      // Focus textarea after React re-renders with the new input value
                       setTimeout(() => document.querySelector('textarea')?.focus(), 0);
                   }}
                   className="px-4 py-3 text-sm text-left text-gray-200 bg-white/5 hover:bg-white/10 backdrop-blur-sm border border-white/10 rounded-xl transition-all hover:text-white hover:border-white/20"

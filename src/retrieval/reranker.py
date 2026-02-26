@@ -25,12 +25,6 @@ class CrossEncoderReranker:
         device: Device to run the model on ('cpu', 'cuda', or None for auto)
     """
 
-    # Popular cross-encoder models for reranking:
-    # - "cross-encoder/ms-marco-MiniLM-L-6-v2" (fast, good quality)
-    # - "cross-encoder/ms-marco-MiniLM-L-12-v2" (balanced)
-    # - "BAAI/bge-reranker-base" (multilingual, good for German)
-    # - "BAAI/bge-reranker-large" (best quality, slower)
-
     DEFAULT_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
     def __init__(

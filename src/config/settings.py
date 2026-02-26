@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # Embedding Model (text-embedding-3-large has better retrieval quality)
     embedding_model: str = "text-embedding-3-large"
-    embedding_dimensions: int = 1536  # Can reduce for faster search (256, 512, 1024, 1536, 3072)
+    embedding_dimensions: int = 1536
 
     # Pfade
     base_dir: Path = Path(__file__).resolve().parents[2]
