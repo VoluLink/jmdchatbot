@@ -1,32 +1,8 @@
 # Dokumentation
 
-Diese Dokumentation enthält detaillierte Setup- und Konfigurationsanleitungen für das AMIKO RAG-System.
+## Guides
 
-## 📚 Verfügbare Guides
-
-### Setup & Installation
-
-- **[SETUP.md](./SETUP.md)** - Hauptanleitung für die Ersteinrichtung
-- **[QUICK_REFERENCE.md](./QUICK_REFERENCE.md)** - Schnellreferenz für häufige Aufgaben
-- **[UPDATE_DEPLOYMENT.md](./UPDATE_DEPLOYMENT.md)** - Update-Ablauf für Server-Deployments
-
-### Features & Konfiguration
-
-- **[AUTHENTICATION_README.md](./AUTHENTICATION_README.md)** - Two-Factor Authentication (2FA) System
-- **[AUTH_SETUP_GUIDE.md](./AUTH_SETUP_GUIDE.md)** - Detaillierte 2FA Einrichtung
-- **[DOCUMENT_SOURCES_GUIDE.md](./DOCUMENT_SOURCES_GUIDE.md)** - Dokumentenverwaltung
-- **[SETUP_AUTOMATED_CHECKS.md](./SETUP_AUTOMATED_CHECKS.md)** - Automatische System-Checks
-
-## 🚀 Schnellstart
-
-Für die Ersteinrichtung:
-
-1. Lies die [Haupt-README](../README.md) für die grundlegende Installation
-2. Folge [SETUP.md](./SETUP.md) für detaillierte Konfiguration
-3. Nutze [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) als tägliche Referenz
-
-## 📧 Support
-
-Bei Fragen oder Problemen:
-- Prüfe die relevanten Guide-Dateien
-- Konsultiere die Hauptdokumentation im Projektroot
+- **[SETUP.md](./SETUP.md)** - Installation und Einrichtung
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Architektur und Tech-Stack
+- **[AUTHENTICATION.md](./AUTHENTICATION.md)** - Authentifizierung, Rollen, 2FA
+- **[UPDATE_DEPLOYMENT.md](./UPDATE_DEPLOYMENT.md)** - Server-Update per Tar-Archiv

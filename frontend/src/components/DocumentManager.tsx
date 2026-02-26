@@ -236,7 +236,6 @@ export function DocumentManager() {
   const handleDeleteFile = async (filePath: string) => {
     setBusyPath(filePath);
     try {
-      // Call backend to delete file
       const sourcesDir = filePath;
       const res = await fetch(`/api/documents/${encodePathSegments(sourcesDir)}`, {
         method: "DELETE",

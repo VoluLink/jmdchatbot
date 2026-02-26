@@ -82,15 +82,6 @@ async def run_advanced_update_job(
         print(f"📝 Found {len(changed_docs)} document(s) to process")
         print()
         
-        # Optional: Parse documents into nodes (chunks) before indexing
-        # This gives you more control over the chunking process
-        # Uncomment the following lines to use custom chunking:
-        #
-        # print("✂️  Parsing documents into chunks...")
-        # nodes = parse_documents_to_nodes(changed_docs, parser_type=parser_type)
-        # print(f"   Created {len(nodes)} chunks")
-        # print()
-        
         # Upsert documents into the index
         print("💾 Indexing documents...")
         count = index_manager.upsert_documents(changed_docs)

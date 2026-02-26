@@ -91,7 +91,7 @@ Im Projektroot eine Datei `.env` anlegen, z. B.:
 
 ```bash
 OPENAI_API_KEY=dein_openai_api_key
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-5-mini
 
 # Verzeichnisse (optional, haben Defaults)
 DATA_DIR=./data
@@ -240,13 +240,11 @@ Die Struktur ist bewusst modular gehalten, damit Komponenten unabhängig erweite
 
 ---
 
-## 📚 Dokumentation
+## Dokumentation
 
-Detaillierte Setup- und Konfigurationsanleitungen findest du im [`docs/`](./docs/) Ordner:
+Detaillierte Anleitungen im [`docs/`](./docs/) Ordner:
 
-- **[Setup-Anleitung](./docs/SETUP.md)** - Detaillierte Einrichtungsschritte
-- **[Schnellreferenz](./docs/QUICK_REFERENCE.md)** - Häufig verwendete Befehle
-- **[Authentifizierung](./docs/AUTHENTICATION_README.md)** - Two-Factor Authentication (2FA)
-- **[Dokumentenverwaltung](./docs/DOCUMENT_SOURCES_GUIDE.md)** - Dokumente hochladen und verwalten
-
-Alle verfügbaren Guides: [docs/README.md](./docs/README.md)
+- **[Setup](./docs/SETUP.md)** - Installation und Einrichtung
+- **[Architektur](./docs/ARCHITECTURE.md)** - Tech-Stack und Architekturentscheidungen
+- **[Authentifizierung](./docs/AUTHENTICATION.md)** - Auth-System, Rollen, 2FA
+- **[Update-Deployment](./docs/UPDATE_DEPLOYMENT.md)** - Server-Update per Tar-Archiv

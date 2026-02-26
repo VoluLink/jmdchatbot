@@ -46,7 +46,6 @@ def load_local_documents(root_dir: Path | None = None) -> List[Document]:
         if not path.is_file():
             continue
         if path.suffix.lower() not in {".txt", ".md"}:
-            # Hier können bei Bedarf weitere Formate ergänzt werden.
             continue
 
         text = _read_text_file(path)
