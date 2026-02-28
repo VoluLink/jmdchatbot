@@ -7,10 +7,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """
-    Zentraler App-Config.
+    Central application configuration.
 
-    Werte kommen standardmäßig aus einer `.env`-Datei
-    im Projektroot oder aus echten Umgebungsvariablen.
+    Values are loaded from a `.env` file in the project root
+    or from real environment variables.
     """
 
     # OpenAI / LLM
@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-large"
     embedding_dimensions: int = 1536
 
-    # Pfade
+    # Paths
     base_dir: Path = Path(__file__).resolve().parents[2]
     data_dir: Path = base_dir / "data"
     chroma_db_dir: Path = data_dir / "chroma"
@@ -89,12 +89,10 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """
-    Singleton-artiger Zugriff auf Settings.
-    """
+    """Cached singleton accessor for the application settings."""
 
     settings = Settings()
-    # Stelle sicher, dass Datenverzeichnisse existieren.
+    # Ensure required data directories exist
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.chroma_db_dir.mkdir(parents=True, exist_ok=True)
     settings.local_data_dir.mkdir(parents=True, exist_ok=True)

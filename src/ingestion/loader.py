@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from typing import Iterable, List, Sequence
+from typing import List, Sequence
 
 import httpx
 from llama_index.core import Document
@@ -11,29 +11,23 @@ from src.config.settings import get_settings
 
 
 def _read_text_file(path: Path) -> str:
-    """
-    Lese eine Textdatei robust ein.
-    """
+    """Read a text file, ignoring encoding errors."""
 
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
 def _hash_content(content: str) -> str:
     """
-    Erzeuge einen stabilen Hash aus dem Dokumentinhalt.
+    Generate a stable SHA-256 hash from document content.
 
-    Dieser Hash wird genutzt, um Änderungen an Dokumenten
-    für inkrementelles Indexing zu erkennen.
+    Used for incremental indexing to detect changed documents.
     """
 
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
 def load_local_documents(root_dir: Path | None = None) -> List[Document]:
-    """
-    Lade alle Textdokumente (z. B. .txt, .md, .pdf konvertiert zu .txt)
-    aus einem lokalen Verzeichnis.
-    """
+    """Load all text documents (.txt, .md) from a local directory."""
 
     settings = get_settings()
     root = root_dir or settings.local_data_dir
@@ -71,9 +65,7 @@ def load_local_documents(root_dir: Path | None = None) -> List[Document]:
 
 
 async def _fetch_url(client: httpx.AsyncClient, url: str) -> str:
-    """
-    Hole den Textinhalt einer URL.
-    """
+    """Fetch the text content of a URL."""
 
     resp = await client.get(url, timeout=30)
     resp.raise_for_status()
@@ -81,9 +73,7 @@ async def _fetch_url(client: httpx.AsyncClient, url: str) -> str:
 
 
 async def load_web_documents(urls: Sequence[str]) -> List[Document]:
-    """
-    Lade Dokumente aus einer Liste von URLs.
-    """
+    """Fetch and wrap documents from a list of URLs."""
 
     documents: List[Document] = []
     if not urls:
@@ -94,7 +84,7 @@ async def load_web_documents(urls: Sequence[str]) -> List[Document]:
             try:
                 text = await _fetch_url(client, url)
             except Exception:
-                # Für Demo-Zwecke: Fehler werden geloggt/ignoriert.
+                # Skip unreachable URLs so the rest of the batch still loads
                 continue
 
             if not text.strip():
@@ -118,9 +108,7 @@ async def load_web_documents(urls: Sequence[str]) -> List[Document]:
 
 
 async def load_all_documents() -> List[Document]:
-    """
-    Aggregiert alle Dokumentquellen (lokal + URLs).
-    """
+    """Aggregate all document sources (local files + URLs)."""
 
     settings = get_settings()
     local_docs = load_local_documents(settings.local_data_dir)

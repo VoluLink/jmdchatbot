@@ -7,11 +7,11 @@ from src.indexing import get_index_manager
 
 async def run_update_job() -> None:
     """
-    Einfache Update-Routine:
+    Simple incremental update routine:
 
-    - lädt alle konfigurierten Dokumentquellen
-    - erkennt neue/aktualisierte Dokumente
-    - fügt diese inkrementell in den Index ein
+    - Loads all configured document sources
+    - Detects new or changed documents
+    - Upserts them into the index
     """
 
     index_manager = get_index_manager()
@@ -20,14 +20,13 @@ async def run_update_job() -> None:
     changed_docs = index_manager.get_changed_documents(documents)
 
     if not changed_docs:
-        print(f"[{datetime.utcnow().isoformat()}] Keine neuen/geänderten Dokumente gefunden.")
+        print(f"[{datetime.utcnow().isoformat()}] No new or changed documents found.")
         return
 
     count = index_manager.upsert_documents(changed_docs)
-    print(f"[{datetime.utcnow().isoformat()}] {count} Dokument(e) aktualisiert.")
+    print(f"[{datetime.utcnow().isoformat()}] {count} document(s) updated.")
 
 
 if __name__ == "__main__":
-    # Ermöglicht: python -m src.updater.jobs
     asyncio.run(run_update_job())
 

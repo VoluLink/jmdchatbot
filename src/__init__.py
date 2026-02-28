@@ -1,7 +1,7 @@
 """
-Top-Level-Package für die RAG-Pipeline.
+Top-level package for the RAG pipeline.
 
-Ermöglicht Importe wie `src.app.main` oder `src.updater.jobs`.
+Enables imports like `src.app.main` or `src.updater.jobs`.
 """
 
 

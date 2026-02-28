@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from llama_index.core.schema import NodeWithScore, QueryBundle
+from llama_index.core.schema import NodeWithScore
 
 
 class CrossEncoderReranker:
@@ -71,97 +71,22 @@ class CrossEncoderReranker:
 
         top_n = top_n or self._top_n
 
-        # Don't rerank if we have fewer nodes than top_n
         if len(nodes) <= top_n:
             return nodes
 
-        # Load model on first use
         model = self._load_model()
-
-        # Prepare query-document pairs for scoring
         pairs = [(query, node.node.get_content()) for node in nodes]
-
-        # Get cross-encoder scores
         scores = model.predict(pairs)
 
-        # Create scored nodes
         scored_nodes = list(zip(nodes, scores))
-
-        # Sort by cross-encoder score (descending)
         scored_nodes.sort(key=lambda x: x[1], reverse=True)
 
-        # Return top_n with updated scores
         result = []
         for node, score in scored_nodes[:top_n]:
             result.append(
                 NodeWithScore(
                     node=node.node,
                     score=float(score),  # Use cross-encoder score
-                )
-            )
-
-        return result
-
-
-class CohereReranker:
-    """
-    Alternative reranker using Cohere's Rerank API.
-
-    Requires a Cohere API key. Generally provides better quality
-    than local cross-encoders but requires API calls.
-    """
-
-    def __init__(
-        self,
-        api_key: str,
-        model: str = "rerank-multilingual-v3.0",
-        top_n: int = 5,
-    ) -> None:
-        self._api_key = api_key
-        self._model = model
-        self._top_n = top_n
-        self._client = None
-
-    def _load_client(self):
-        """Lazy load Cohere client."""
-        if self._client is None:
-            import cohere
-
-            self._client = cohere.Client(self._api_key)
-        return self._client
-
-    def rerank(
-        self,
-        query: str,
-        nodes: List[NodeWithScore],
-        top_n: Optional[int] = None,
-    ) -> List[NodeWithScore]:
-        """Rerank using Cohere API."""
-        if not nodes:
-            return []
-
-        top_n = top_n or self._top_n
-        client = self._load_client()
-
-        # Prepare documents
-        documents = [node.node.get_content() for node in nodes]
-
-        # Call Cohere rerank
-        response = client.rerank(
-            query=query,
-            documents=documents,
-            top_n=min(top_n, len(documents)),
-            model=self._model,
-        )
-
-        # Map results back to nodes
-        result = []
-        for item in response.results:
-            original_node = nodes[item.index]
-            result.append(
-                NodeWithScore(
-                    node=original_node.node,
-                    score=item.relevance_score,
                 )
             )
 

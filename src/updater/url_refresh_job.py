@@ -16,7 +16,6 @@ from typing import Any, Dict, List
 import httpx
 from llama_index.core import Document
 
-from src.config.settings import get_settings
 from src.indexing import get_index_manager
 
 
