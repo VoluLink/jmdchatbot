@@ -10,12 +10,7 @@ This version uses:
 
 import asyncio
 from datetime import datetime
-from typing import Optional
-
-from src.ingestion.advanced_loader import (
-    load_all_documents_advanced,
-    parse_documents_to_nodes,
-)
+from src.ingestion.advanced_loader import load_all_documents_advanced
 from src.indexing import get_index_manager
 
 

@@ -19,11 +19,6 @@ from typing import List, Optional
 
 import httpx
 from llama_index.core import Document, SimpleDirectoryReader
-from llama_index.core.node_parser import (
-    SentenceSplitter,
-    SemanticSplitterNodeParser,
-)
-from llama_index.core.schema import BaseNode
 
 from src.config.settings import get_settings
 
@@ -72,26 +67,20 @@ def load_local_documents_advanced(
         return []
     
     try:
-        # Use LlamaIndex's SimpleDirectoryReader for automatic parsing
         reader = SimpleDirectoryReader(
             input_dir=str(root),
             recursive=recursive,
             required_exts=required_exts,
-            filename_as_id=True,  # Use filename as doc_id
-            errors="ignore",  # Skip files that can't be read
+            filename_as_id=True,
+            errors="ignore",
         )
-        
+
         documents = reader.load_data()
-        
-        # Add custom metadata and content hash
+
+        # Enrich each document with a content hash for incremental indexing
         for doc in documents:
-            # Get the file path from metadata
             file_path = doc.metadata.get("file_path", "unknown")
-            
-            # Calculate content hash for change detection
             content_hash = _hash_content(doc.text)
-            
-            # Enhance metadata
             doc.metadata.update({
                 "source": "local",
                 "path": file_path,
@@ -173,13 +162,11 @@ async def load_all_documents_advanced() -> List[Document]:
     print("=" * 60)
     print()
     
-    # Load local documents
     print("📁 Loading local documents...")
     local_docs = load_local_documents_advanced(settings.local_data_dir)
     print(f"   Found {len(local_docs)} local documents")
     print()
-    
-    # Load web documents
+
     print("🌐 Loading web documents...")
     web_docs = await load_web_documents_advanced(settings.source_urls)
     print(f"   Found {len(web_docs)} web documents")
@@ -193,72 +180,6 @@ async def load_all_documents_advanced() -> List[Document]:
     return total_docs
 
 
-def create_node_parser(
-    parser_type: str = "sentence",
-    chunk_size: Optional[int] = None,
-    chunk_overlap: Optional[int] = None,
-) -> SentenceSplitter | SemanticSplitterNodeParser:
-    """
-    Create a node parser for chunking documents.
-    
-    LlamaIndex provides several parsing strategies:
-    - 'sentence': Split by sentences (fast, good for most cases)
-    - 'semantic': Split by semantic similarity (slower, better quality)
-    
-    Args:
-        parser_type: Type of parser ('sentence' or 'semantic')
-        chunk_size: Size of chunks in tokens
-        chunk_overlap: Overlap between chunks in tokens
-    
-    Returns:
-        Configured node parser
-    """
-    settings = get_settings()
-    chunk_size = chunk_size or settings.chunk_size
-    chunk_overlap = chunk_overlap or settings.chunk_overlap
-    
-    if parser_type == "semantic":
-        print("🧠 Using Semantic Splitter (AI-powered chunking)")
-        # Semantic splitter uses embeddings to find natural break points
-        return SemanticSplitterNodeParser(
-            buffer_size=1,
-            breakpoint_percentile_threshold=95,
-        )
-    else:
-        print(f"📝 Using Sentence Splitter (chunk_size={chunk_size}, overlap={chunk_overlap})")
-        # Sentence splitter is faster and works well for most cases
-        return SentenceSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-        )
-
-
-def parse_documents_to_nodes(
-    documents: List[Document],
-    parser_type: str = "sentence",
-) -> List[BaseNode]:
-    """
-    Parse documents into nodes (chunks) using LlamaIndex parsers.
-    
-    Args:
-        documents: List of documents to parse
-        parser_type: Type of parser to use
-    
-    Returns:
-        List of nodes (document chunks)
-    """
-    if not documents:
-        return []
-    
-    parser = create_node_parser(parser_type=parser_type)
-    nodes = parser.get_nodes_from_documents(documents)
-    
-    print(f"✂️  Split {len(documents)} documents into {len(nodes)} chunks")
-    
-    return nodes
-
-
-# Convenience function for specific file types
 def load_pdfs_only(root_dir: Optional[Path] = None) -> List[Document]:
     """Load only PDF files."""
     return load_local_documents_advanced(root_dir, required_exts=[".pdf"])
@@ -269,13 +190,5 @@ def load_office_docs_only(root_dir: Optional[Path] = None) -> List[Document]:
     return load_local_documents_advanced(
         root_dir,
         required_exts=[".docx", ".pptx", ".xlsx"]
-    )
-
-
-def load_text_docs_only(root_dir: Optional[Path] = None) -> List[Document]:
-    """Load only text-based documents."""
-    return load_local_documents_advanced(
-        root_dir,
-        required_exts=[".txt", ".md", ".markdown"]
     )
 

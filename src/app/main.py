@@ -15,7 +15,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from llama_index.core.query_engine import CitationQueryEngine
 from llama_index.core.prompts import PromptTemplate
-from llama_index.core.response_synthesizers import get_response_synthesizer
 
 from src.config.settings import get_settings
 from src.indexing import get_index_manager
@@ -119,6 +118,7 @@ def _utc_now_iso() -> str:
 
 
 def _trim_tail(current: str, chunk: str) -> str:
+    """Keep only the last MAX_TAIL_CHARS characters of accumulated output."""
     next_tail = current + chunk
     if len(next_tail) <= MAX_TAIL_CHARS:
         return next_tail
@@ -166,6 +166,7 @@ def _capture_process_stream(
     stream: Optional[TextIO],
     state_key: Literal["outputTail", "errorTail"],
 ) -> None:
+    """Read a subprocess stream in a daemon thread and append to job state."""
     if stream is None:
         return
     try:
@@ -177,6 +178,7 @@ def _capture_process_stream(
 
 
 def _watch_index_process(process: subprocess.Popen[str]) -> None:
+    """Wait for the indexing subprocess and record its exit status."""
     exit_code = process.wait()
     with _index_job_lock:
         _index_job_state["running"] = False
@@ -193,22 +195,21 @@ def _watch_index_process(process: subprocess.Popen[str]) -> None:
 settings = get_settings()
 index_manager = get_index_manager()
 
-# Preload reranker model on startup to avoid cold start delay
 _reranker_cache = None
 def get_reranker():
+    """Return the cached reranker, lazily loading the model on first call."""
     global _reranker_cache
     if _reranker_cache is None and settings.use_reranker:
         _reranker_cache = CrossEncoderReranker(
             model_name=settings.reranker_model,
             top_n=5,
         )
-        # Warm up the model with a dummy call
-        _reranker_cache._load_model()
+        _reranker_cache._load_model()  # warm up to avoid first-query latency
     return _reranker_cache
 
 app = FastAPI(
     title="RAG Seminararbeit – LlamaIndex API",
-    description="Einfacher Query-Service für eine modulare RAG-Pipeline.",
+    description="Query service for a modular RAG pipeline.",
     version="0.1.0",
 )
 
@@ -216,10 +217,9 @@ app = FastAPI(
 async def startup_event():
     """Preload models on startup to avoid cold start delay."""
     print("Preloading models...")
-    get_reranker()  # Load reranker model
+    get_reranker()
     print("Models ready!")
 
-# Add CORS Middleware to allow requests from the frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.resolved_cors_origins,
@@ -230,8 +230,7 @@ app.add_middleware(
 
 
 def clean_response(text: str) -> str:
-    """Remove trailing source sections from LLM response."""
-    # Remove common patterns like "Quellen:", "Sources:", "Referenzen:" at the end
+    """Strip source-list sections the LLM sometimes appends (the UI shows sources separately)."""
     patterns = [
         r'\n\s*Quellen:.*$',
         r'\n\s*Sources:.*$',
@@ -405,14 +404,13 @@ async def start_index_job(req: IndexJobRequest) -> JSONResponse:
 @app.post("/query", response_model=QueryResponse)
 async def query(req: QueryRequest) -> QueryResponse:
     """
-    Stelle eine Frage an den RAG-Index.
+    Query the RAG index.
 
-    Antwortet mit generiertem Text und Inline-Zitaten.
+    Returns a generated answer with inline citations.
     """
 
     index = index_manager.index
 
-    # Create LLM with custom temperature
     from llama_index.llms.openai import OpenAI
     llm = OpenAI(
         api_key=settings.openai_api_key,
@@ -420,10 +418,9 @@ async def query(req: QueryRequest) -> QueryResponse:
         temperature=req.temperature,
     )
 
-    # Get cached reranker (preloaded on startup)
     reranker = get_reranker() if settings.use_reranker else None
 
-    # Initialize query transformer if enabled (HyDE generates better retrieval queries)
+    # HyDE generates a hypothetical answer to improve semantic matching
     query_transformer = None
     if settings.use_query_transform:
         query_transformer = QueryTransformer(
@@ -432,7 +429,8 @@ async def query(req: QueryRequest) -> QueryResponse:
             language="german",
         )
 
-    # Use hybrid retrieval if enabled and nodes are available
+    # Build hybrid retriever when enabled and nodes are cached, else vector-only
+    retriever = None
     if settings.use_hybrid_search:
         nodes = index_manager.get_all_nodes()
         if nodes:
@@ -444,25 +442,16 @@ async def query(req: QueryRequest) -> QueryResponse:
                 reranker=reranker,
                 query_transformer=query_transformer,
             )
-            # Build CitationQueryEngine with custom hybrid retriever
-            query_engine = CitationQueryEngine.from_args(
-                index,
-                retriever=retriever,
-                llm=llm,
-                citation_chunk_size=req.chunk_size,
-                citation_qa_template=CITATION_QA_TEMPLATE,
-            )
-        else:
-            # Fallback to vector-only if no nodes cached yet
-            query_engine = CitationQueryEngine.from_args(
-                index,
-                similarity_top_k=req.top_k,
-                llm=llm,
-                citation_chunk_size=req.chunk_size,
-                citation_qa_template=CITATION_QA_TEMPLATE,
-            )
+
+    if retriever is not None:
+        query_engine = CitationQueryEngine.from_args(
+            index,
+            retriever=retriever,
+            llm=llm,
+            citation_chunk_size=req.chunk_size,
+            citation_qa_template=CITATION_QA_TEMPLATE,
+        )
     else:
-        # Vector-only retrieval
         query_engine = CitationQueryEngine.from_args(
             index,
             similarity_top_k=req.top_k,
@@ -472,29 +461,24 @@ async def query(req: QueryRequest) -> QueryResponse:
         )
 
     try:
-        # LlamaIndex ist synchron, daher in Thread ausführen.
+        # LlamaIndex query is synchronous, so run it in a thread
         loop = asyncio.get_running_loop()
         response = await loop.run_in_executor(None, query_engine.query, req.question)
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    # Antwort und Quellen extrahieren.
     answer_text = clean_response(str(response))
-    
-    # Extract citation numbers from answer text
-    import re
     cited_numbers = set(re.findall(r'\[(\d+)\]', answer_text))
     
     sources: List[Dict[str, Any]] = []
     for idx, node in enumerate(getattr(response, "source_nodes", []) or []):
         citation_num = idx + 1
         
-        # Only include sources that were actually cited in the answer
+        # Only include sources actually cited in the answer
         if str(citation_num) not in cited_numbers:
             continue
-            
+
         metadata = node.metadata or {}
-        # Get filename from path
         path = metadata.get("path") or metadata.get("file_path") or ""
         filename = path.split("\\")[-1].split("/")[-1] if path else f"Quelle {citation_num}"
         

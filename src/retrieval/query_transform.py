@@ -9,9 +9,7 @@ Includes:
 
 from __future__ import annotations
 
-from typing import List, Optional
-
-from llama_index.core.schema import QueryBundle
+from typing import List
 
 
 class QueryTransformer:
@@ -120,80 +118,3 @@ Variations:"""
         # Clean up and filter empty lines
         variations = [v.strip() for v in variations if v.strip()]
         return variations[:self._num_queries]
-
-
-class HyDERetriever:
-    """
-    Wrapper that applies HyDE transformation before retrieval.
-
-    This retriever generates a hypothetical answer first, then uses
-    that answer to find similar documents via the base retriever.
-    """
-
-    def __init__(
-        self,
-        base_retriever,
-        llm,
-        language: str = "german",
-    ) -> None:
-        self._base_retriever = base_retriever
-        self._transformer = QueryTransformer(
-            llm=llm,
-            strategy="hyde",
-            language=language,
-        )
-
-    def retrieve(self, query_bundle: QueryBundle):
-        """Retrieve using HyDE-transformed query."""
-        original_query = query_bundle.query_str
-        hyde_queries = self._transformer.transform(original_query)
-
-        if hyde_queries:
-            # Use the hypothetical document for retrieval
-            hyde_bundle = QueryBundle(query_str=hyde_queries[0])
-            return self._base_retriever.retrieve(hyde_bundle)
-
-        return self._base_retriever.retrieve(query_bundle)
-
-
-class MultiQueryRetriever:
-    """
-    Retriever that uses multiple query variations and combines results.
-
-    Generates query variations, retrieves for each, and deduplicates
-    the combined results.
-    """
-
-    def __init__(
-        self,
-        base_retriever,
-        llm,
-        num_queries: int = 3,
-        language: str = "german",
-    ) -> None:
-        self._base_retriever = base_retriever
-        self._transformer = QueryTransformer(
-            llm=llm,
-            strategy="multi_query",
-            num_queries=num_queries,
-            language=language,
-        )
-
-    def retrieve(self, query_bundle: QueryBundle):
-        """Retrieve using multiple query variations."""
-        original_query = query_bundle.query_str
-        queries = [original_query] + self._transformer.transform(original_query)
-
-        # Retrieve for each query
-        all_nodes = {}
-        for query in queries:
-            bundle = QueryBundle(query_str=query)
-            nodes = self._base_retriever.retrieve(bundle)
-            for node in nodes:
-                node_id = node.node.node_id
-                if node_id not in all_nodes or node.score > all_nodes[node_id].score:
-                    all_nodes[node_id] = node
-
-        # Sort by score and return
-        sorted_nodes = sorted(all_nodes.values(), key=lambda x: x.score, reverse=True)
-        return sorted_nodes

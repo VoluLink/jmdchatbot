@@ -3,13 +3,12 @@ from __future__ import annotations
 import json
 import pickle
 from functools import lru_cache
-from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Dict, List, Sequence
 
 import chromadb
 from llama_index.core import Document, VectorStoreIndex
 from llama_index.core.node_parser import SentenceSplitter
-from llama_index.core.schema import BaseNode, TextNode
+from llama_index.core.schema import BaseNode
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
 from llama_index.vector_stores.chroma import ChromaVectorStore
@@ -19,53 +18,46 @@ from src.config.settings import get_settings
 
 class IndexManager:
     """
-    Kapselt LlamaIndex + Chroma-VectorStore.
+    Wraps LlamaIndex + Chroma vector store.
 
-    - nutzt einen persistenten Chroma-Client
-    - unterstützt inkrementelles Indexing durch gezieltes Einfügen von Nodes
+    - Uses a persistent Chroma client backed by the filesystem
+    - Supports incremental indexing via targeted node insertion
     """
 
     def __init__(self) -> None:
         settings = get_settings()
 
-        # Chroma persistent im Dateisystem
         self._chroma_client = chromadb.PersistentClient(path=str(settings.chroma_db_dir))
         self._collection = self._chroma_client.get_or_create_collection(settings.index_name)
         self._vector_store = ChromaVectorStore(chroma_collection=self._collection)
-
-        # LLM für LlamaIndex
         self._llm = OpenAI(api_key=settings.openai_api_key, model=settings.openai_model)
-
-        # Embedding-Modell für LlamaIndex (configurable model with dimensions)
         self._embed_model = OpenAIEmbedding(
             api_key=settings.openai_api_key,
             model=settings.embedding_model,
             dimensions=settings.embedding_dimensions,
         )
 
-        # Index aus bestehendem VectorStore aufbauen (wenn leer, wird er automatisch gefüllt)
+        # Build index from existing vector store (auto-populated when empty)
         self._index = VectorStoreIndex.from_vector_store(
             self._vector_store,
             llm=self._llm,
             embed_model=self._embed_model,
         )
 
-        # Chunking
         self._parser = SentenceSplitter(
             chunk_size=settings.chunk_size,
             chunk_overlap=settings.chunk_overlap,
         )
 
-        # Pfad für Dokument-Metadaten (Hash, Quelle, etc.)
         self._metadata_path = settings.data_dir / "doc_metadata.json"
         self._metadata: Dict[str, Dict] = self._load_metadata()
 
-        # Pfad für Node-Speicherung (für BM25 Retrieval)
+        # Pickle cache of all nodes, needed for BM25 keyword retrieval
         self._nodes_path = settings.data_dir / "nodes_cache.pkl"
         self._nodes_cache: List[BaseNode] = self._load_nodes_cache()
 
     # ------------------------------------------------------------------
-    # Metadaten-Verwaltung
+    # Metadata management
     # ------------------------------------------------------------------
     def _load_metadata(self) -> Dict[str, Dict]:
         if not self._metadata_path.exists():
@@ -76,6 +68,7 @@ class IndexManager:
             return {}
 
     def _save_metadata(self) -> None:
+        # Atomic write: write to .tmp then rename to avoid corrupted reads
         self._metadata_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = self._metadata_path.with_suffix(self._metadata_path.suffix + ".tmp")
         tmp_path.write_text(
@@ -85,7 +78,7 @@ class IndexManager:
         tmp_path.replace(self._metadata_path)
 
     # ------------------------------------------------------------------
-    # Node-Cache für BM25 Retrieval
+    # Node cache for BM25 retrieval
     # ------------------------------------------------------------------
     def _load_nodes_cache(self) -> List[BaseNode]:
         """Load cached nodes for BM25 retrieval."""
@@ -128,16 +121,12 @@ class IndexManager:
     # ------------------------------------------------------------------
     @property
     def index(self) -> VectorStoreIndex:
-        """
-        Zugriff auf den zugrundeliegenden VectorStoreIndex.
-        """
+        """Return the underlying VectorStoreIndex."""
 
         return self._index
 
     def _build_nodes(self, documents: Sequence[Document]) -> List[BaseNode]:
-        """
-        Erzeuge semantische Chunks (Nodes) aus Dokumenten.
-        """
+        """Split documents into semantic chunks (nodes)."""
 
         all_nodes: List[BaseNode] = []
         for doc in documents:
@@ -147,66 +136,51 @@ class IndexManager:
 
     def delete_document(self, doc_id: str) -> bool:
         """
-        Lösche alle Nodes eines Dokuments aus dem Index.
+        Delete all nodes belonging to a document from the index.
 
-        Returns True wenn erfolgreich gelöscht, False wenn Dokument nicht existiert.
+        Returns True on success, False if the document does not exist.
         """
         try:
-            # Delete all nodes/chunks associated with this document ID
             self._index.delete_ref_doc(doc_id, delete_from_docstore=True)
-
-            # Remove nodes from BM25 cache
             self._nodes_cache = [
                 node for node in self._nodes_cache
                 if node.ref_doc_id != doc_id
             ]
             self._save_nodes_cache()
 
-            # Remove from metadata
             if doc_id in self._metadata:
                 del self._metadata[doc_id]
                 self._save_metadata()
 
             return True
-        except Exception as e:
-            # Document might not exist in index yet (first time indexing)
+        except Exception:
             return False
 
     def upsert_documents(self, documents: Sequence[Document]) -> int:
         """
-        Füge neue/geänderte Dokumente in den Index ein.
-        
-        WICHTIG: Löscht alte Versionen eines Dokuments, bevor neue Chunks eingefügt werden.
-        Dies verhindert doppelte/veraltete Daten im Index.
+        Insert new or updated documents into the index.
 
-        Die Funktion erwartet, dass die übergebenen Dokumente bereits
-        als "neu oder geändert" erkannt wurden (z. B. über content_hash).
+        Deletes old versions of a document before inserting new chunks to
+        prevent duplicates and stale data. Expects documents that have
+        already been identified as new or changed (e.g. via content_hash).
         """
 
         if not documents:
             return 0
 
-        # Für jedes Dokument: Alte Nodes löschen, dann neue einfügen
         for doc in documents:
             doc_id = doc.doc_id
 
-            # Lösche alte Version des Dokuments (falls vorhanden)
             if doc_id in self._metadata:
                 print(f"  🗑️  Removing old version of: {doc.metadata.get('name', doc_id)}")
                 self.delete_document(doc_id)
 
-            # Erstelle neue Chunks/Nodes
             nodes = self._build_nodes([doc])
-
-            # Füge neue Nodes ein
             self._index.insert_nodes(nodes)
-
-            # Add to nodes cache for BM25
             self._nodes_cache.extend(nodes)
 
             print(f"  ✅ Indexed {len(nodes)} chunk(s) for: {doc.metadata.get('name', doc_id)}")
 
-            # Metadaten aktualisieren
             content_hash = doc.metadata.get("content_hash")
             self._metadata[doc_id] = {
                 "source": doc.metadata.get("source"),
@@ -222,9 +196,7 @@ class IndexManager:
         return len(documents)
 
     def get_changed_documents(self, documents: Sequence[Document]) -> List[Document]:
-        """
-        Filtert alle Dokumente heraus, die neu oder inhaltlich geändert sind.
-        """
+        """Return only documents that are new or whose content has changed."""
 
         changed: List[Document] = []
 
@@ -250,17 +222,6 @@ class IndexManager:
             self.delete_document(doc_id)
         return len(doc_ids)
 
-    def delete_documents_by_paths(self, file_paths: List[str]) -> int:
-        """Batch delete documents matching any of the given file paths."""
-        path_set = set(file_paths)
-        doc_ids = [
-            doc_id for doc_id, meta in self._metadata.items()
-            if meta.get("path") in path_set
-        ]
-        for doc_id in doc_ids:
-            self.delete_document(doc_id)
-        return len(doc_ids)
-
     def delete_documents_by_prefix(self, path_prefix: str) -> int:
         """Delete all documents whose metadata 'path' starts with the given prefix (folder deletion)."""
         doc_ids = [
@@ -281,24 +242,9 @@ class IndexManager:
             self.delete_document(doc_id)
         return len(doc_ids)
 
-    def get_all_document_ids(self) -> List[str]:
-        """
-        Gibt alle doc_ids zurück, die aktuell im Index sind.
-        """
-        return list(self._metadata.keys())
-
-    def get_document_metadata(self, doc_id: str) -> Dict | None:
-        """
-        Gibt Metadaten für ein bestimmtes Dokument zurück.
-        """
-        return self._metadata.get(doc_id)
-
-
 @lru_cache(maxsize=1)
 def get_index_manager() -> IndexManager:
-    """
-    Singleton-Instanz des IndexManagers (für API & Jobs).
-    """
+    """Singleton IndexManager instance shared by the API and background jobs."""
 
     return IndexManager()
 
