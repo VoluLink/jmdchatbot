@@ -9,7 +9,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,10 +30,13 @@ services:
       DATA_DIR: /data
       LOCAL_DATA_DIR: /data/sources
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+      BACKEND_API_BASE_URL: ${BACKEND_API_BASE_URL}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     volumes:
       - ./data:/data
     ports:
-      - "3000:3000"
+      - '3000:3000'
 
 volumes:
   postgres_data:

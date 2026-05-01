@@ -6,6 +6,9 @@ After=network.target
 Type=simple
 WorkingDirectory=/home/projekt/jmdchatbot
 EnvironmentFile=/home/projekt/jmdchatbot/deploy/backend.env
+Environment="LANG=C.UTF-8"
+Environment="PYTHONIOENCODING=utf-8"
+Environment="PYTHONUTF8=1"
 ExecStart=/home/projekt/jmdchatbot/.venv/bin/python -m uvicorn src.app.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=5

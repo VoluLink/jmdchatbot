@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import subprocess
 import sys
@@ -342,6 +343,11 @@ async def start_index_job(req: IndexJobRequest) -> JSONResponse:
     args = _build_indexer_args(req.force, req.semantic, target_paths)
     command = [sys.executable, *args]
 
+    # Force UTF-8 in the child process so Emojis/Unicode in print()
+    child_env = os.environ.copy()
+    child_env["PYTHONIOENCODING"] = "utf-8"
+    child_env["PYTHONUTF8"] = "1"
+
     try:
         process = subprocess.Popen(
             command,
@@ -349,7 +355,10 @@ async def start_index_job(req: IndexJobRequest) -> JSONResponse:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             bufsize=1,
+            env=child_env,
         )
     except Exception as exc:
         return JSONResponse(

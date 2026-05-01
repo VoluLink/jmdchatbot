@@ -89,5 +89,6 @@ amiko-app.tar
 
 # Frontend local database
 frontend/data/
+!frontend/*/lib
 
 jmdchatbot-deploy.tar
