@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import pickle
+import time
 from functools import lru_cache
+from pathlib import Path
 from typing import Dict, List, Sequence
 
 import chromadb
@@ -14,6 +17,22 @@ from llama_index.llms.openai import OpenAI
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from src.config.settings import get_settings
+
+
+def _atomic_replace(src: Path, dst: Path, attempts: int = 10, delay: float = 0.1) -> None:
+    # Why: on Windows, os.replace fails with PermissionError if the target file
+    # is briefly held by another process (Next.js reading doc_metadata.json,
+    # antivirus, indexer service). Retry with backoff to ride out transient locks.
+    last_error: OSError | None = None
+    for i in range(attempts):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError as e:
+            last_error = e
+            time.sleep(delay * (i + 1))
+    assert last_error is not None
+    raise last_error
 
 
 class IndexManager:
@@ -75,7 +94,7 @@ class IndexManager:
             json.dumps(self._metadata, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
-        tmp_path.replace(self._metadata_path)
+        _atomic_replace(tmp_path, self._metadata_path)
 
     # ------------------------------------------------------------------
     # Node cache for BM25 retrieval
